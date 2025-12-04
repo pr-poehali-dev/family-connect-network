@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -6,6 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TabsContent } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 type User = {
   id: number;
@@ -40,9 +44,30 @@ type ChatsTabProps = {
   currentUser: User;
   selectedChat: Chat | null;
   setSelectedChat: (chat: Chat | null) => void;
+  onCreateChat: (chatName: string, isGroup: boolean) => void;
+  onSendMessage: (text: string) => void;
 };
 
-export default function ChatsTab({ chats, messages, users, currentUser, selectedChat, setSelectedChat }: ChatsTabProps) {
+export default function ChatsTab({ chats, messages, users, currentUser, selectedChat, setSelectedChat, onCreateChat, onSendMessage }: ChatsTabProps) {
+  const [newChatName, setNewChatName] = useState('');
+  const [isGroupChat, setIsGroupChat] = useState(true);
+  const [messageText, setMessageText] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const handleCreateChat = () => {
+    if (newChatName.trim()) {
+      onCreateChat(newChatName, isGroupChat);
+      setNewChatName('');
+      setIsDialogOpen(false);
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (messageText.trim()) {
+      onSendMessage(messageText);
+      setMessageText('');
+    }
+  };
   return (
     <TabsContent value="chats" className="animate-fade-in">
       <div className="grid lg:grid-cols-3 gap-4">
@@ -50,9 +75,44 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
           <CardHeader className="bg-gradient-to-r from-primary/30 to-accent/30">
             <CardTitle className="flex items-center justify-between">
               <span>Все беседы</span>
-              <Button size="icon" variant="ghost" className="rounded-full hover:bg-card/50">
-                <Icon name="Plus" size={20} />
-              </Button>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="icon" variant="ghost" className="rounded-full hover:bg-card/50">
+                    <Icon name="Plus" size={20} />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="rounded-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Создать новую беседу</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <div>
+                      <Label htmlFor="chatName">Название беседы</Label>
+                      <Input
+                        id="chatName"
+                        value={newChatName}
+                        onChange={(e) => setNewChatName(e.target.value)}
+                        placeholder="Например: Семейный чат"
+                        className="rounded-xl border-2 mt-2"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="isGroup">Групповая беседа</Label>
+                      <Switch
+                        id="isGroup"
+                        checked={isGroupChat}
+                        onCheckedChange={setIsGroupChat}
+                      />
+                    </div>
+                    <Button
+                      onClick={handleCreateChat}
+                      className="w-full rounded-full bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+                    >
+                      Создать
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardTitle>
           </CardHeader>
           <ScrollArea className="h-[500px]">
@@ -142,8 +202,20 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                   <Input
                     placeholder="Написать сообщение..."
                     className="flex-1 rounded-full border-2"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
                   />
-                  <Button size="icon" className="rounded-full bg-gradient-to-r from-primary to-secondary hover:opacity-90">
+                  <Button 
+                    size="icon" 
+                    className="rounded-full bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+                    onClick={handleSendMessage}
+                  >
                     <Icon name="Send" size={20} />
                   </Button>
                 </div>

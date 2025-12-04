@@ -65,17 +65,53 @@ export default function Index() {
     { id: 4, name: 'Мария', avatar: '', initials: 'МВ', status: 'pending', role: 'user' },
   ]);
 
-  const [chats] = useState<Chat[]>([
+  const [chats, setChats] = useState<Chat[]>([
     { id: 1, name: 'Общий чат', avatar: '', lastMessage: 'Привет всем!', unread: 3, isGroup: true },
     { id: 2, name: 'Родители', avatar: '', lastMessage: 'Когда приедете?', unread: 1, isGroup: true },
     { id: 3, name: 'Елена', avatar: '', lastMessage: 'Спасибо за фото!', unread: 0, isGroup: false },
   ]);
 
-  const [messages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Message[]>([
     { id: 1, senderId: 2, text: 'Привет! Как дела?', timestamp: '10:30' },
     { id: 2, senderId: 1, text: 'Отлично! А у тебя?', timestamp: '10:32' },
     { id: 3, senderId: 2, text: 'Тоже хорошо! Смотри какое фото нашла', timestamp: '10:33', hasImage: true },
   ]);
+
+  const handleCreateChat = (chatName: string, isGroup: boolean) => {
+    const newChat: Chat = {
+      id: chats.length + 1,
+      name: chatName,
+      avatar: '',
+      lastMessage: 'Новая беседа создана',
+      unread: 0,
+      isGroup: isGroup
+    };
+    setChats([...chats, newChat]);
+  };
+
+  const handleSendMessage = (text: string) => {
+    if (!selectedChat || !text.trim()) return;
+    
+    const newMessage: Message = {
+      id: messages.length + 1,
+      senderId: currentUser.id,
+      text: text,
+      timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    };
+    
+    setMessages([...messages, newMessage]);
+    
+    setChats(chats.map(chat => 
+      chat.id === selectedChat.id 
+        ? { ...chat, lastMessage: text }
+        : chat
+    ));
+  };
+
+  const handleOpenChat = (chat: Chat) => {
+    setSelectedChat(chat);
+    setActiveTab('chats');
+  };
 
   const [posts] = useState<Post[]>([
     {
@@ -159,6 +195,8 @@ export default function Index() {
             currentUser={currentUser}
             selectedChat={selectedChat}
             setSelectedChat={setSelectedChat}
+            onCreateChat={handleCreateChat}
+            onSendMessage={handleSendMessage}
           />
 
           <TabsContent value="messages" className="animate-fade-in">
@@ -171,6 +209,7 @@ export default function Index() {
                   {chats.filter(c => !c.isGroup).map((chat) => (
                     <button
                       key={chat.id}
+                      onClick={() => handleOpenChat(chat)}
                       className="w-full p-4 rounded-xl bg-muted hover:bg-muted/70 transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
