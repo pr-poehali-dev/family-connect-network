@@ -239,109 +239,116 @@ def update_user_profile(user_id, name, bio=None, position=None):
     conn.close()
     return dict(user) if user else None
 
+def get_body(event):
+    """Получить данные из body (POST) или query (GET)"""
+    method = event.get('httpMethod', 'GET')
+    if method == 'POST':
+        raw = event.get('body', '{}')
+        if raw:
+            return json.loads(raw)
+    return {}
+
 def handler(event, context):
-    """API для семейной соцсети — чаты, сообщения, посты, авторизация"""
+    """API для семейной соцсети Альфа Семья"""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors_headers(), 'body': ''}
 
-    method = event.get('httpMethod', 'GET')
-    path = event.get('queryStringParameters', {}) or {}
-    action = path.get('action', '')
+    params = event.get('queryStringParameters', {}) or {}
+    action = params.get('action', '')
+    body = get_body(event)
+    p = {**params, **body}
 
-    if method == 'GET':
-        if action == 'chats':
-            return response(200, get_chats(path.get('user_id', 1)))
-        elif action == 'messages':
-            chat_id = path.get('chat_id')
-            if not chat_id:
-                return response(400, {'error': 'chat_id required'})
-            return response(200, get_messages(int(chat_id)))
-        elif action == 'posts':
-            return response(200, get_posts())
-        elif action == 'users':
-            return response(200, get_users())
-        else:
-            return response(200, {'status': 'ok'})
+    if action == 'chats':
+        return response(200, get_chats(p.get('user_id', 1)))
 
-    elif method == 'POST':
-        body = json.loads(event.get('body', '{}'))
+    elif action == 'messages':
+        chat_id = p.get('chat_id')
+        if not chat_id:
+            return response(400, {'error': 'chat_id required'})
+        return response(200, get_messages(int(chat_id)))
 
-        if action == 'register':
-            name = body.get('name', '').strip()
-            password = body.get('password', '')
-            phone = body.get('phone', '').strip()
-            login = body.get('login', '').strip()
-            if not name or not password:
-                return response(400, {'error': 'Укажите имя и пароль'})
-            if not phone and not login:
-                return response(400, {'error': 'Укажите номер телефона или логин'})
-            if login and not login.startswith('U_'):
-                return response(400, {'error': 'Логин должен начинаться с U_'})
-            user, err = register_user(name, password, phone, login)
-            if err:
-                return response(400, {'error': err})
-            return response(200, user)
+    elif action == 'posts':
+        return response(200, get_posts())
 
-        elif action == 'login':
-            identifier = body.get('identifier', '').strip()
-            password = body.get('password', '')
-            if not identifier or not password:
-                return response(400, {'error': 'Укажите логин/телефон и пароль'})
-            user, err = login_user(identifier, password)
-            if err:
-                return response(400, {'error': err})
-            return response(200, user)
+    elif action == 'users':
+        return response(200, get_users())
 
-        elif action == 'approve_user':
-            user_id = body.get('user_id')
-            if not user_id:
-                return response(400, {'error': 'user_id required'})
-            result = approve_user(int(user_id))
-            return response(200, result) if result else response(404, {'error': 'user not found'})
+    elif action == 'login':
+        identifier = p.get('identifier', '').strip()
+        password = p.get('password', '')
+        if not identifier or not password:
+            return response(400, {'error': 'Укажите логин/телефон и пароль'})
+        user, err = login_user(identifier, password)
+        if err:
+            return response(400, {'error': err})
+        return response(200, user)
 
-        elif action == 'reject_user':
-            user_id = body.get('user_id')
-            if not user_id:
-                return response(400, {'error': 'user_id required'})
-            result = reject_user(int(user_id))
-            return response(200, result) if result else response(404, {'error': 'user not found'})
+    elif action == 'register':
+        name = p.get('name', '').strip()
+        password = p.get('password', '')
+        phone = p.get('phone', '').strip()
+        login = p.get('login', '').strip()
+        if not name or not password:
+            return response(400, {'error': 'Укажите имя и пароль'})
+        if not phone and not login:
+            return response(400, {'error': 'Укажите номер телефона или логин'})
+        if login and not login.startswith('U_'):
+            return response(400, {'error': 'Логин должен начинаться с U_'})
+        user, err = register_user(name, password, phone, login)
+        if err:
+            return response(400, {'error': err})
+        return response(200, user)
 
-        elif action == 'send_message':
-            chat_id = body.get('chat_id')
-            sender_id = body.get('sender_id')
-            text = body.get('text')
-            if not all([chat_id, sender_id, text]):
-                return response(400, {'error': 'chat_id, sender_id, text required'})
-            return response(200, send_message(int(chat_id), int(sender_id), text))
+    elif action == 'approve_user':
+        user_id = p.get('user_id')
+        if not user_id:
+            return response(400, {'error': 'user_id required'})
+        result = approve_user(int(user_id))
+        return response(200, result) if result else response(404, {'error': 'user not found'})
 
-        elif action == 'create_chat':
-            name = body.get('name')
-            is_group = body.get('is_group', True)
-            created_by = body.get('created_by', 1)
-            if not name:
-                return response(400, {'error': 'name required'})
-            return response(200, create_chat(name, is_group, int(created_by)))
+    elif action == 'reject_user':
+        user_id = p.get('user_id')
+        if not user_id:
+            return response(400, {'error': 'user_id required'})
+        result = reject_user(int(user_id))
+        return response(200, result) if result else response(404, {'error': 'user not found'})
 
-        elif action == 'update_chat_avatar':
-            chat_id = body.get('chat_id')
-            avatar_url = body.get('avatar_url')
-            if not all([chat_id, avatar_url]):
-                return response(400, {'error': 'chat_id, avatar_url required'})
-            return response(200, update_chat_avatar(int(chat_id), avatar_url))
+    elif action == 'send_message':
+        chat_id = p.get('chat_id')
+        sender_id = p.get('sender_id')
+        text = p.get('text', '')
+        if not all([chat_id, sender_id, text]):
+            return response(400, {'error': 'chat_id, sender_id, text required'})
+        return response(200, send_message(int(chat_id), int(sender_id), text))
 
-        elif action == 'update_profile':
-            user_id = body.get('user_id')
-            name = body.get('name')
-            bio = body.get('bio', '')
-            position = body.get('position', '')
-            if not all([user_id, name]):
-                return response(400, {'error': 'user_id, name required'})
-            result = update_user_profile(int(user_id), name, bio, position)
-            if result:
-                return response(200, result)
-            return response(404, {'error': 'user not found'})
+    elif action == 'create_chat':
+        name = p.get('name', '')
+        is_group = p.get('is_group', 'true')
+        if isinstance(is_group, str):
+            is_group = is_group.lower() == 'true'
+        created_by = p.get('created_by', 1)
+        if not name:
+            return response(400, {'error': 'name required'})
+        return response(200, create_chat(name, is_group, int(created_by)))
 
-        else:
-            return response(400, {'error': 'unknown action'})
+    elif action == 'update_chat_avatar':
+        chat_id = p.get('chat_id')
+        avatar_url = p.get('avatar_url', '')
+        if not all([chat_id, avatar_url]):
+            return response(400, {'error': 'chat_id, avatar_url required'})
+        return response(200, update_chat_avatar(int(chat_id), avatar_url))
 
-    return response(405, {'error': 'method not allowed'})
+    elif action == 'update_profile':
+        user_id = p.get('user_id')
+        name = p.get('name', '')
+        bio = p.get('bio', '')
+        position = p.get('position', '')
+        if not all([user_id, name]):
+            return response(400, {'error': 'user_id, name required'})
+        result = update_user_profile(int(user_id), name, bio, position)
+        if result:
+            return response(200, result)
+        return response(404, {'error': 'user not found'})
+
+    else:
+        return response(200, {'status': 'ok'})
