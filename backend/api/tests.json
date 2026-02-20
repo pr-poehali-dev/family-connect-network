@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Health check",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {"status": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get chats",
+      "method": "GET",
+      "path": "/?action=chats",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Get users",
+      "method": "GET",
+      "path": "/?action=users",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Get posts",
+      "method": "GET",
+      "path": "/?action=posts",
+      "expectedStatus": 200
+    }
+  ]
+}

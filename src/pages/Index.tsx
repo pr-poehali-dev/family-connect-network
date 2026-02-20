@@ -7,14 +7,27 @@ import HomeTab from '@/components/HomeTab';
 import ChatsTab from '@/components/ChatsTab';
 import ProfileTab from '@/components/ProfileTab';
 import AdminTab from '@/components/AdminTab';
+import api from '@/lib/api';
 
 type User = {
   id: number;
   name: string;
-  avatar: string;
+  avatar_url: string;
   initials: string;
   status: 'approved' | 'pending';
   role: 'admin' | 'user';
+};
+
+type DbMessage = {
+  id: number;
+  chat_id: number;
+  sender_id: number;
+  text: string;
+  has_image: boolean;
+  image_url: string;
+  created_at: string;
+  sender_name: string;
+  sender_initials: string;
 };
 
 type Message = {
@@ -25,6 +38,15 @@ type Message = {
   hasImage?: boolean;
 };
 
+type DbChat = {
+  id: number;
+  name: string;
+  is_group: boolean;
+  avatar_url: string;
+  last_message: string;
+  unread: number;
+};
+
 type Chat = {
   id: number;
   name: string;
@@ -32,6 +54,18 @@ type Chat = {
   lastMessage: string;
   unread: number;
   isGroup: boolean;
+};
+
+type DbPost = {
+  id: number;
+  user_id: number;
+  text: string;
+  image_url: string;
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+  user_name: string;
+  user_initials: string;
 };
 
 type Post = {
@@ -44,122 +78,128 @@ type Post = {
   comments: number;
 };
 
-const STORAGE_KEYS = {
-  chats: 'alfa_chats',
-  messages: 'alfa_messages',
-  posts: 'alfa_posts',
-  siteName: 'alfa_siteName',
-};
+function formatTime(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
 
-const defaultChats: Chat[] = [
-  { id: 1, name: 'Общий чат', avatar: '', lastMessage: 'Привет всем!', unread: 3, isGroup: true },
-  { id: 2, name: 'Родители', avatar: '', lastMessage: 'Когда приедете?', unread: 1, isGroup: true },
-  { id: 3, name: 'Елена', avatar: '', lastMessage: 'Спасибо за фото!', unread: 0, isGroup: false },
-];
+function timeAgo(dateStr: string) {
+  const now = Date.now();
+  const d = new Date(dateStr).getTime();
+  const diff = Math.floor((now - d) / 60000);
+  if (diff < 1) return 'только что';
+  if (diff < 60) return `${diff} мин. назад`;
+  const hours = Math.floor(diff / 60);
+  if (hours < 24) return `${hours} ч. назад`;
+  const days = Math.floor(hours / 24);
+  return `${days} дн. назад`;
+}
 
-const defaultMessages: Message[] = [
-  { id: 1, senderId: 2, text: 'Привет! Как дела?', timestamp: '10:30' },
-  { id: 2, senderId: 1, text: 'Отлично! А у тебя?', timestamp: '10:32' },
-  { id: 3, senderId: 2, text: 'Тоже хорошо! Смотри какое фото нашла', timestamp: '10:33', hasImage: true },
-];
+function mapChat(c: DbChat): Chat {
+  return { id: c.id, name: c.name, avatar: c.avatar_url || '', lastMessage: c.last_message || '', unread: c.unread, isGroup: c.is_group };
+}
 
-const defaultPosts: Post[] = [
-  {
-    id: 1,
-    userId: 2,
-    text: 'Какой прекрасный день! Были всей семьей на пикнике 🌳',
-    image: '🏞️',
-    timestamp: '2 часа назад',
-    likes: 12,
-    comments: 5
-  },
-  {
-    id: 2,
-    userId: 4,
-    text: 'Поздравляю всех с началом лета! Желаю тепла и солнца ☀️',
-    timestamp: '5 часов назад',
-    likes: 8,
-    comments: 3
-  },
-];
+function mapMessage(m: DbMessage): Message {
+  return { id: m.id, senderId: m.sender_id, text: m.text, timestamp: formatTime(m.created_at), hasImage: m.has_image };
+}
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch {
-    return fallback;
-  }
+function mapPost(p: DbPost): Post {
+  return { id: p.id, userId: p.user_id, text: p.text, image: p.image_url || undefined, timestamp: timeAgo(p.created_at), likes: p.likes_count, comments: p.comments_count };
+}
+
+function mapUser(u: { id: number; name: string; avatar_url: string | null; initials: string; status: string; role: string }): User {
+  return { id: u.id, name: u.name, avatar_url: u.avatar_url || '', initials: u.initials, status: u.status as 'approved' | 'pending', role: u.role as 'admin' | 'user' };
 }
 
 export default function Index() {
-  const [currentUser] = useState<User>({
-    id: 1,
-    name: 'Владимир',
-    avatar: '',
-    initials: 'ВП',
-    status: 'approved',
-    role: 'admin'
+  const [currentUser, setCurrentUser] = useState<User>({
+    id: 1, name: 'Администратор', avatar_url: '', initials: 'АД', status: 'approved', role: 'admin'
   });
 
   const [activeTab, setActiveTab] = useState('home');
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [siteName, setSiteName] = useState(() => loadFromStorage(STORAGE_KEYS.siteName, 'Альфа Семья'));
-  
-  const [users] = useState<User[]>([
-    { id: 1, name: 'Владимир', avatar: '', initials: 'ВП', status: 'approved', role: 'admin' },
-    { id: 2, name: 'Елена', avatar: '', initials: 'ЕС', status: 'approved', role: 'user' },
-    { id: 3, name: 'Александр', avatar: '', initials: 'АК', status: 'pending', role: 'user' },
-    { id: 4, name: 'Мария', avatar: '', initials: 'МВ', status: 'pending', role: 'user' },
-  ]);
+  const [siteName, setSiteName] = useState('Альфа Семья');
 
-  const [chats, setChats] = useState<Chat[]>(() => loadFromStorage(STORAGE_KEYS.chats, defaultChats));
-  const [messages, setMessages] = useState<Message[]>(() => loadFromStorage(STORAGE_KEYS.messages, defaultMessages));
-  const [posts] = useState<Post[]>(() => loadFromStorage(STORAGE_KEYS.posts, defaultPosts));
+  const [users, setUsers] = useState<User[]>([]);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.chats, JSON.stringify(chats)); }, [chats]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.messages, JSON.stringify(messages)); }, [messages]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.posts, JSON.stringify(posts)); }, [posts]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.siteName, JSON.stringify(siteName)); }, [siteName]);
-
-  const handleCreateChat = useCallback((chatName: string, isGroup: boolean) => {
-    setChats(prev => {
-      const newChat: Chat = {
-        id: prev.length + 1,
-        name: chatName,
-        avatar: '',
-        lastMessage: 'Новая беседа создана',
-        unread: 0,
-        isGroup
-      };
-      return [...prev, newChat];
-    });
+  useEffect(() => {
+    async function load() {
+      try {
+        const [dbUsers, dbChats, dbPosts] = await Promise.all([
+          api.getUsers(),
+          api.getChats(),
+          api.getPosts(),
+        ]);
+        const mappedUsers = dbUsers.map(mapUser);
+        setUsers(mappedUsers);
+        setChats(dbChats.map(mapChat));
+        setPosts(dbPosts.map(mapPost));
+        const admin = mappedUsers.find((u: User) => u.role === 'admin');
+        if (admin) setCurrentUser(admin);
+      } catch (e) {
+        console.error('Failed to load data:', e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
-  const handleSendMessage = useCallback((text: string) => {
+  useEffect(() => {
+    if (!selectedChat) return;
+    api.getMessages(selectedChat.id).then((dbMsgs: DbMessage[]) => {
+      setMessages(dbMsgs.map(mapMessage));
+    }).catch(console.error);
+  }, [selectedChat?.id]);
+
+  const handleCreateChat = useCallback(async (chatName: string, isGroup: boolean) => {
+    try {
+      const dbChat = await api.createChat(chatName, isGroup, currentUser.id);
+      const newChat: Chat = {
+        id: dbChat.id,
+        name: dbChat.name,
+        avatar: dbChat.avatar_url || '',
+        lastMessage: '',
+        unread: 0,
+        isGroup: dbChat.is_group
+      };
+      setChats(prev => [...prev, newChat]);
+    } catch (e) {
+      console.error('Failed to create chat:', e);
+    }
+  }, [currentUser.id]);
+
+  const handleSendMessage = useCallback(async (text: string) => {
     if (!selectedChat || !text.trim()) return;
-    
-    const newMessage: Message = {
-      id: Date.now(),
-      senderId: currentUser.id,
-      text,
-      timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    };
-    
-    setMessages(prev => [...prev, newMessage]);
-    
-    setChats(prev => prev.map(chat => 
-      chat.id === selectedChat.id 
-        ? { ...chat, lastMessage: text }
-        : chat
-    ));
+    try {
+      const dbMsg = await api.sendMessage(selectedChat.id, currentUser.id, text);
+      const newMsg: Message = {
+        id: dbMsg.id,
+        senderId: dbMsg.sender_id,
+        text: dbMsg.text,
+        timestamp: formatTime(dbMsg.created_at),
+      };
+      setMessages(prev => [...prev, newMsg]);
+      setChats(prev => prev.map(c =>
+        c.id === selectedChat.id ? { ...c, lastMessage: text } : c
+      ));
+    } catch (e) {
+      console.error('Failed to send message:', e);
+    }
   }, [selectedChat, currentUser.id]);
 
-  const handleChangeChatAvatar = useCallback((chatId: number, avatarUrl: string) => {
-    setChats(prev => prev.map(chat =>
-      chat.id === chatId ? { ...chat, avatar: avatarUrl } : chat
-    ));
-    setSelectedChat(prev => prev?.id === chatId ? { ...prev, avatar: avatarUrl } : prev);
+  const handleChangeChatAvatar = useCallback(async (chatId: number, avatarUrl: string) => {
+    try {
+      await api.updateChatAvatar(chatId, avatarUrl);
+      setChats(prev => prev.map(c => c.id === chatId ? { ...c, avatar: avatarUrl } : c));
+      setSelectedChat(prev => prev?.id === chatId ? { ...prev, avatar: avatarUrl } : prev);
+    } catch (e) {
+      console.error('Failed to update avatar:', e);
+    }
   }, []);
 
   const handleOpenChat = useCallback((chat: Chat) => {
@@ -170,14 +210,35 @@ export default function Index() {
   const pendingUsers = users.filter(u => u.status === 'pending');
   const approvedUsers = users.filter(u => u.status === 'approved');
 
+  const usersForComponents = users.map(u => ({
+    id: u.id, name: u.name, avatar: u.avatar_url, initials: u.initials, status: u.status, role: u.role
+  }));
+
+  const currentUserForComponents = {
+    id: currentUser.id, name: currentUser.name, avatar: currentUser.avatar_url, initials: currentUser.initials, status: currentUser.status, role: currentUser.role
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-primary rounded-md flex items-center justify-center mx-auto mb-4">
+            <span className="text-white font-bold text-2xl" style={{ fontFamily: 'Arial, sans-serif' }}>А</span>
+          </div>
+          <p className="text-muted-foreground">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <nav className="sticky top-0 z-50 bg-primary shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white rounded-md flex items-center justify-center p-1">
-                <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/5b3c7a9d-3f2b-484f-a3fe-8ba8195d4e94.png" alt="logo" className="w-full h-full object-contain" />
+              <div className="w-10 h-10 bg-white rounded-md flex items-center justify-center">
+                <span className="text-primary font-bold text-2xl leading-none" style={{ fontFamily: 'Arial, sans-serif' }}>А</span>
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">
                 {siteName}
@@ -220,13 +281,13 @@ export default function Index() {
             )}
           </TabsList>
 
-          <HomeTab posts={posts} users={users} />
+          <HomeTab posts={posts} users={usersForComponents} />
 
-          <ChatsTab 
+          <ChatsTab
             chats={chats}
             messages={messages}
-            users={users}
-            currentUser={currentUser}
+            users={usersForComponents}
+            currentUser={currentUserForComponents}
             selectedChat={selectedChat}
             setSelectedChat={setSelectedChat}
             onCreateChat={handleCreateChat}
@@ -240,38 +301,45 @@ export default function Index() {
                 <CardTitle>Личные сообщения</CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
-                <div className="space-y-3">
-                  {chats.filter(c => !c.isGroup).map((chat) => (
-                    <button
-                      key={chat.id}
-                      onClick={() => handleOpenChat(chat)}
-                      className="w-full p-4 rounded-lg bg-muted hover:bg-primary/5 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="w-12 h-12 border-2 border-primary/20">
-                          <AvatarFallback className="bg-primary/10 text-primary font-semibold">{chat.name[0]}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <p className="font-semibold">{chat.name}</p>
-                          <p className="text-sm text-muted-foreground">{chat.lastMessage}</p>
+                {chats.filter(c => !c.isGroup).length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Icon name="MessageCircle" size={40} className="mx-auto mb-3 text-primary/30" />
+                    <p>Нет личных сообщений</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {chats.filter(c => !c.isGroup).map((chat) => (
+                      <button
+                        key={chat.id}
+                        onClick={() => handleOpenChat(chat)}
+                        className="w-full p-4 rounded-lg bg-muted hover:bg-primary/5 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-12 h-12 border-2 border-primary/20">
+                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">{chat.name[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-semibold">{chat.name}</p>
+                            <p className="text-sm text-muted-foreground">{chat.lastMessage}</p>
+                          </div>
+                          <Icon name="ChevronRight" size={20} className="text-muted-foreground" />
                         </div>
-                        <Icon name="ChevronRight" size={20} className="text-muted-foreground" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <ProfileTab currentUser={currentUser} />
+          <ProfileTab currentUser={currentUserForComponents} />
 
           {currentUser.role === 'admin' && (
-            <AdminTab 
+            <AdminTab
               siteName={siteName}
               setSiteName={setSiteName}
-              pendingUsers={pendingUsers}
-              approvedUsers={approvedUsers}
+              pendingUsers={pendingUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar_url, initials: u.initials, status: u.status, role: u.role }))}
+              approvedUsers={approvedUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar_url, initials: u.initials, status: u.status, role: u.role }))}
             />
           )}
         </Tabs>
