@@ -151,7 +151,9 @@ export default function Index() {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/01ef4cbe-b948-4eee-9dcf-f956fc905864.png" alt="logo" className="w-10 h-10 object-contain rounded" />
+              <div className="w-10 h-10 bg-white rounded flex items-center justify-center">
+                <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/5b3c7a9d-3f2b-484f-a3fe-8ba8195d4e94.png" alt="logo" className="w-7 h-7 object-contain" />
+              </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">
                 {siteName}
               </h1>
