@@ -142,10 +142,8 @@ export default function Index() {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <Icon name="Heart" size={20} className="text-foreground" />
-              </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/5b3c7a9d-3f2b-484f-a3fe-8ba8195d4e94.png" alt="logo" className="w-10 h-10 object-contain" />
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">
                 {siteName}
               </h1>
             </div>
