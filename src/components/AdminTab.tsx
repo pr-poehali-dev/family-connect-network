@@ -1,14 +1,14 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { TabsContent } from '@/components/ui/tabs';
+import api from '@/lib/api';
 
 type User = {
   id: number;
@@ -24,13 +24,41 @@ type AdminTabProps = {
   setSiteName: (name: string) => void;
   pendingUsers: User[];
   approvedUsers: User[];
+  onUserApproved?: (userId: number) => void;
+  onUserRejected?: (userId: number) => void;
 };
 
-export default function AdminTab({ siteName, setSiteName, pendingUsers, approvedUsers }: AdminTabProps) {
+export default function AdminTab({ siteName, setSiteName, pendingUsers, approvedUsers, onUserApproved, onUserRejected }: AdminTabProps) {
+  const [processing, setProcessing] = useState<number | null>(null);
+
+  const handleApprove = async (userId: number) => {
+    setProcessing(userId);
+    try {
+      await api.approveUser(userId);
+      onUserApproved?.(userId);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleReject = async (userId: number) => {
+    setProcessing(userId);
+    try {
+      await api.rejectUser(userId);
+      onUserRejected?.(userId);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   return (
     <TabsContent value="admin" className="space-y-4 animate-fade-in">
-      <Card className="border-2 rounded-2xl overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-destructive/20 to-primary/30">
+      <Card className="border rounded-lg overflow-hidden">
+        <CardHeader className="bg-primary text-white">
           <CardTitle className="flex items-center gap-2">
             <Icon name="Shield" size={24} />
             Панель администратора
@@ -44,9 +72,9 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
                 id="siteName"
                 value={siteName}
                 onChange={(e) => setSiteName(e.target.value)}
-                className="rounded-xl border-2"
+                className="rounded-md border-2"
               />
-              <Button className="rounded-full bg-gradient-to-r from-primary to-secondary hover:opacity-90">
+              <Button className="rounded-md bg-primary text-white hover:bg-primary/90">
                 Сохранить
               </Button>
             </div>
@@ -56,16 +84,16 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
 
           <div>
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Icon name="UserCheck" size={20} />
-              Запросы на вступление ({pendingUsers.length})
+              <Icon name="UserCheck" size={20} className="text-primary" />
+              Заявки на вступление ({pendingUsers.length})
             </h3>
             {pendingUsers.length > 0 ? (
               <div className="space-y-3">
                 {pendingUsers.map((user) => (
-                  <div key={user.id} className="p-4 rounded-xl bg-muted flex items-center justify-between">
+                  <div key={user.id} className="p-4 rounded-lg bg-muted flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10 border-2 border-secondary">
-                        <AvatarFallback className="bg-accent">{user.initials}</AvatarFallback>
+                      <Avatar className="w-10 h-10 border-2 border-primary/20">
+                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">{user.initials}</AvatarFallback>
                       </Avatar>
                       <div>
                         <p className="font-semibold">{user.name}</p>
@@ -73,10 +101,23 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" className="rounded-full bg-gradient-to-r from-primary to-secondary hover:opacity-90">
+                      <Button
+                        size="sm"
+                        onClick={() => handleApprove(user.id)}
+                        disabled={processing === user.id}
+                        className="rounded-md bg-primary text-white hover:bg-primary/90"
+                      >
+                        <Icon name="Check" size={16} className="mr-1" />
                         Одобрить
                       </Button>
-                      <Button size="sm" variant="outline" className="rounded-full hover:bg-destructive/10">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReject(user.id)}
+                        disabled={processing === user.id}
+                        className="rounded-md hover:bg-destructive/10"
+                      >
+                        <Icon name="X" size={16} className="mr-1" />
                         Отклонить
                       </Button>
                     </div>
@@ -84,7 +125,7 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground text-center py-8">Нет новых запросов</p>
+              <p className="text-muted-foreground text-center py-8">Нет новых заявок</p>
             )}
           </div>
 
@@ -92,15 +133,15 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
 
           <div>
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Icon name="Users" size={20} />
-              Управление пользователями ({approvedUsers.length})
+              <Icon name="Users" size={20} className="text-primary" />
+              Активные пользователи ({approvedUsers.length})
             </h3>
             <div className="space-y-3">
               {approvedUsers.map((user) => (
-                <div key={user.id} className="p-4 rounded-xl bg-muted flex items-center justify-between">
+                <div key={user.id} className="p-4 rounded-lg bg-muted flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Avatar className="w-10 h-10 border-2 border-primary">
-                      <AvatarFallback className="bg-secondary">{user.initials}</AvatarFallback>
+                    <Avatar className="w-10 h-10 border-2 border-primary/20">
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">{user.initials}</AvatarFallback>
                     </Avatar>
                     <div>
                       <p className="font-semibold">{user.name}</p>
@@ -109,61 +150,8 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
                       </Badge>
                     </div>
                   </div>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button size="sm" variant="outline" className="rounded-full gap-2">
-                        <Icon name="Settings" size={16} />
-                        Управление
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="rounded-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Управление пользователем: {user.name}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 pt-4">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor={`block-${user.id}`}>Заблокировать пользователя</Label>
-                          <Switch id={`block-${user.id}`} />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor={`mod-${user.id}`}>Модератор контента</Label>
-                          <Switch id={`mod-${user.id}`} />
-                        </div>
-                        <Separator />
-                        <Button variant="destructive" className="w-full rounded-full gap-2">
-                          <Icon name="Trash2" size={16} />
-                          Удалить пользователя
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
                 </div>
               ))}
-            </div>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Icon name="FileText" size={20} />
-              Модерация контента
-            </h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button variant="outline" className="rounded-xl gap-2 h-auto py-4 hover:scale-105 transition-transform duration-200">
-                <Icon name="MessageSquare" size={20} />
-                <div className="text-left">
-                  <p className="font-semibold">Сообщения</p>
-                  <p className="text-xs text-muted-foreground">Проверка жалоб</p>
-                </div>
-              </Button>
-              <Button variant="outline" className="rounded-xl gap-2 h-auto py-4 hover:scale-105 transition-transform duration-200">
-                <Icon name="Image" size={20} />
-                <div className="text-left">
-                  <p className="font-semibold">Медиа</p>
-                  <p className="text-xs text-muted-foreground">Проверка файлов</p>
-                </div>
-              </Button>
             </div>
           </div>
         </CardContent>

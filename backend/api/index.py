@@ -1,5 +1,6 @@
 import json
 import os
+import hashlib
 import psycopg2
 import psycopg2.extras
 
@@ -11,8 +12,8 @@ def get_conn():
 def cors_headers():
     return {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Auth-Token, X-Session-Id',
         'Access-Control-Max-Age': '86400',
         'Content-Type': 'application/json'
     }
@@ -24,6 +25,89 @@ def response(status_code, body):
         'body': json.dumps(body, default=str, ensure_ascii=False)
     }
 
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def register_user(name, password, phone='', login=''):
+    """Регистрация нового пользователя"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if phone:
+        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE phone = %s AND phone != ''", (phone,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return None, 'Пользователь с таким номером уже зарегистрирован'
+    if login:
+        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE login = %s AND login != ''", (login,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return None, 'Пользователь с таким логином уже зарегистрирован'
+
+    initials = ''.join([w[0].upper() for w in name.split()[:2]]) if name else 'НП'
+    email = f"{login or phone}@alfa.local"
+    pwd_hash = hash_password(password)
+
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.users (name, email, password_hash, initials, phone, login, status, role)
+        VALUES (%s, %s, %s, %s, %s, %s, 'pending', 'user')
+        RETURNING id, name, initials, avatar_url, bio, position, phone, login, status, role
+    """, (name, email, pwd_hash, initials, phone or '', login or ''))
+    user = dict(cur.fetchone())
+    conn.commit()
+    cur.close()
+    conn.close()
+    return user, None
+
+def login_user(identifier, password):
+    """Авторизация пользователя по телефону или логину"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    pwd_hash = hash_password(password)
+
+    cur.execute(f"""
+        SELECT id, name, initials, avatar_url, bio, position, phone, login, status, role
+        FROM {SCHEMA}.users
+        WHERE (phone = %s OR login = %s) AND password_hash = %s
+    """, (identifier, identifier, pwd_hash))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not user:
+        return None, 'Неверный логин/телефон или пароль'
+    return dict(user), None
+
+def approve_user(user_id):
+    """Одобрить пользователя (админ)"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        UPDATE {SCHEMA}.users SET status = 'approved', updated_at = NOW()
+        WHERE id = %s
+        RETURNING id, name, initials, status, role
+    """, (user_id,))
+    user = cur.fetchone()
+    conn.commit()
+    cur.close()
+    conn.close()
+    return dict(user) if user else None
+
+def reject_user(user_id):
+    """Отклонить пользователя (админ)"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        UPDATE {SCHEMA}.users SET status = 'rejected', updated_at = NOW()
+        WHERE id = %s
+        RETURNING id, name, initials, status, role
+    """, (user_id,))
+    user = cur.fetchone()
+    conn.commit()
+    cur.close()
+    conn.close()
+    return dict(user) if user else None
+
 def get_chats(user_id):
     """Получить все беседы"""
     conn = get_conn()
@@ -31,8 +115,8 @@ def get_chats(user_id):
     cur.execute(f"""
         SELECT c.id, c.name, c.is_group, c.avatar_url,
             COALESCE(
-                (SELECT m.text FROM {SCHEMA}.messages m 
-                 WHERE m.chat_id = c.id 
+                (SELECT m.text FROM {SCHEMA}.messages m
+                 WHERE m.chat_id = c.id
                  ORDER BY m.created_at DESC LIMIT 1),
                 ''
             ) as last_message,
@@ -130,7 +214,7 @@ def get_users():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(f"""
-        SELECT id, name, initials, avatar_url, bio, position, status, role, created_at
+        SELECT id, name, initials, avatar_url, bio, position, phone, login, status, role, created_at
         FROM {SCHEMA}.users
         ORDER BY id
     """)
@@ -156,7 +240,7 @@ def update_user_profile(user_id, name, bio=None, position=None):
     return dict(user) if user else None
 
 def handler(event, context):
-    """API для семейной соцсети — чаты, сообщения, посты, пользователи"""
+    """API для семейной соцсети — чаты, сообщения, посты, авторизация"""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors_headers(), 'body': ''}
 
@@ -177,17 +261,59 @@ def handler(event, context):
         elif action == 'users':
             return response(200, get_users())
         else:
-            return response(200, {'status': 'ok', 'actions': ['chats', 'messages', 'posts', 'users']})
+            return response(200, {'status': 'ok'})
 
     elif method == 'POST':
         body = json.loads(event.get('body', '{}'))
-        if action == 'send_message':
+
+        if action == 'register':
+            name = body.get('name', '').strip()
+            password = body.get('password', '')
+            phone = body.get('phone', '').strip()
+            login = body.get('login', '').strip()
+            if not name or not password:
+                return response(400, {'error': 'Укажите имя и пароль'})
+            if not phone and not login:
+                return response(400, {'error': 'Укажите номер телефона или логин'})
+            if login and not login.startswith('U_'):
+                return response(400, {'error': 'Логин должен начинаться с U_'})
+            user, err = register_user(name, password, phone, login)
+            if err:
+                return response(400, {'error': err})
+            return response(200, user)
+
+        elif action == 'login':
+            identifier = body.get('identifier', '').strip()
+            password = body.get('password', '')
+            if not identifier or not password:
+                return response(400, {'error': 'Укажите логин/телефон и пароль'})
+            user, err = login_user(identifier, password)
+            if err:
+                return response(400, {'error': err})
+            return response(200, user)
+
+        elif action == 'approve_user':
+            user_id = body.get('user_id')
+            if not user_id:
+                return response(400, {'error': 'user_id required'})
+            result = approve_user(int(user_id))
+            return response(200, result) if result else response(404, {'error': 'user not found'})
+
+        elif action == 'reject_user':
+            user_id = body.get('user_id')
+            if not user_id:
+                return response(400, {'error': 'user_id required'})
+            result = reject_user(int(user_id))
+            return response(200, result) if result else response(404, {'error': 'user not found'})
+
+        elif action == 'send_message':
             chat_id = body.get('chat_id')
             sender_id = body.get('sender_id')
             text = body.get('text')
             if not all([chat_id, sender_id, text]):
                 return response(400, {'error': 'chat_id, sender_id, text required'})
             return response(200, send_message(int(chat_id), int(sender_id), text))
+
         elif action == 'create_chat':
             name = body.get('name')
             is_group = body.get('is_group', True)
@@ -195,12 +321,14 @@ def handler(event, context):
             if not name:
                 return response(400, {'error': 'name required'})
             return response(200, create_chat(name, is_group, int(created_by)))
+
         elif action == 'update_chat_avatar':
             chat_id = body.get('chat_id')
             avatar_url = body.get('avatar_url')
             if not all([chat_id, avatar_url]):
                 return response(400, {'error': 'chat_id, avatar_url required'})
             return response(200, update_chat_avatar(int(chat_id), avatar_url))
+
         elif action == 'update_profile':
             user_id = body.get('user_id')
             name = body.get('name')
@@ -212,6 +340,7 @@ def handler(event, context):
             if result:
                 return response(200, result)
             return response(404, {'error': 'user not found'})
+
         else:
             return response(400, {'error': 'unknown action'})
 

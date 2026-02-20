@@ -3,8 +3,9 @@ const API_URL = 'https://functions.poehali.dev/706339d3-e113-4f57-95bb-145dbb141
 async function request(action: string, params?: Record<string, string>) {
   const query = new URLSearchParams({ action, ...params }).toString();
   const res = await fetch(`${API_URL}?${query}`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `API error: ${res.status}`);
+  return data;
 }
 
 async function post(action: string, body: Record<string, unknown>) {
@@ -13,11 +14,20 @@ async function post(action: string, body: Record<string, unknown>) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `API error: ${res.status}`);
+  return data;
 }
 
 export const api = {
+  register: (name: string, password: string, phone: string, login: string) =>
+    post('register', { name, password, phone, login }),
+  login: (identifier: string, password: string) =>
+    post('login', { identifier, password }),
+  approveUser: (userId: number) =>
+    post('approve_user', { user_id: userId }),
+  rejectUser: (userId: number) =>
+    post('reject_user', { user_id: userId }),
   getChats: () => request('chats'),
   getMessages: (chatId: number) => request('messages', { chat_id: String(chatId) }),
   getUsers: () => request('users'),

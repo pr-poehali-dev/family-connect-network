@@ -1,0 +1,3 @@
+
+ALTER TABLE t_p43528340_family_connect_netwo.users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) DEFAULT '';
+ALTER TABLE t_p43528340_family_connect_netwo.users ADD COLUMN IF NOT EXISTS login VARCHAR(100) DEFAULT '';
