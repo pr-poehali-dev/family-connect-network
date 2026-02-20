@@ -56,7 +56,7 @@ export default function Index() {
 
   const [activeTab, setActiveTab] = useState('home');
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [siteName, setSiteName] = useState('Наша Семья');
+  const [siteName, setSiteName] = useState('Альфа Семья');
   
   const [users] = useState<User[]>([
     { id: 1, name: 'Владимир', avatar: '', initials: 'ВП', status: 'approved', role: 'admin' },
@@ -138,20 +138,20 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
+      <nav className="sticky top-0 z-50 bg-primary shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/5b3c7a9d-3f2b-484f-a3fe-8ba8195d4e94.png" alt="logo" className="w-10 h-10 object-contain" />
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">
+              <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/5b3c7a9d-3f2b-484f-a3fe-8ba8195d4e94.png" alt="logo" className="w-10 h-10 object-contain brightness-0 invert" />
+              <h1 className="text-2xl font-bold text-white tracking-tight">
                 {siteName}
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <Avatar className="w-9 h-9 border-2 border-primary">
-                <AvatarFallback className="bg-secondary text-sm font-medium">{currentUser.initials}</AvatarFallback>
+              <Avatar className="w-9 h-9 border-2 border-white/40">
+                <AvatarFallback className="bg-white/20 text-white text-sm font-medium">{currentUser.initials}</AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium hidden sm:inline">{currentUser.name}</span>
+              <span className="text-sm font-medium text-white hidden sm:inline">{currentUser.name}</span>
             </div>
           </div>
         </div>
@@ -159,25 +159,25 @@ export default function Index() {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid bg-muted/50 p-1 rounded-2xl">
-            <TabsTrigger value="home" className="rounded-xl gap-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid bg-white p-1 rounded-lg border border-border shadow-sm">
+            <TabsTrigger value="home" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Icon name="Home" size={18} />
               <span className="hidden sm:inline">Главная</span>
             </TabsTrigger>
-            <TabsTrigger value="chats" className="rounded-xl gap-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+            <TabsTrigger value="chats" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Icon name="MessageCircle" size={18} />
               <span className="hidden sm:inline">Беседы</span>
             </TabsTrigger>
-            <TabsTrigger value="messages" className="rounded-xl gap-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+            <TabsTrigger value="messages" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Icon name="Send" size={18} />
               <span className="hidden sm:inline">Сообщения</span>
             </TabsTrigger>
-            <TabsTrigger value="profile" className="rounded-xl gap-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+            <TabsTrigger value="profile" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Icon name="User" size={18} />
               <span className="hidden sm:inline">Профиль</span>
             </TabsTrigger>
             {currentUser.role === 'admin' && (
-              <TabsTrigger value="admin" className="rounded-xl gap-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <TabsTrigger value="admin" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
                 <Icon name="Shield" size={18} />
                 <span className="hidden sm:inline">Админ</span>
               </TabsTrigger>
