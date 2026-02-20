@@ -130,7 +130,7 @@ def get_users():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(f"""
-        SELECT id, name, initials, avatar_url, status, role, created_at
+        SELECT id, name, initials, avatar_url, bio, position, status, role, created_at
         FROM {SCHEMA}.users
         ORDER BY id
     """)
@@ -139,16 +139,16 @@ def get_users():
     conn.close()
     return [dict(r) for r in users]
 
-def update_user_profile(user_id, name, bio=None):
+def update_user_profile(user_id, name, bio=None, position=None):
     """Обновить профиль пользователя"""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     initials = ''.join([w[0].upper() for w in name.split()[:2]]) if name else ''
     cur.execute(f"""
-        UPDATE {SCHEMA}.users SET name = %s, initials = %s, bio = %s, updated_at = NOW()
+        UPDATE {SCHEMA}.users SET name = %s, initials = %s, bio = %s, position = %s, updated_at = NOW()
         WHERE id = %s
-        RETURNING id, name, initials, avatar_url, bio, status, role
-    """, (name, initials, bio, user_id))
+        RETURNING id, name, initials, avatar_url, bio, position, status, role
+    """, (name, initials, bio, position or '', user_id))
     user = cur.fetchone()
     conn.commit()
     cur.close()
@@ -205,9 +205,10 @@ def handler(event, context):
             user_id = body.get('user_id')
             name = body.get('name')
             bio = body.get('bio', '')
+            position = body.get('position', '')
             if not all([user_id, name]):
                 return response(400, {'error': 'user_id, name required'})
-            result = update_user_profile(int(user_id), name, bio)
+            result = update_user_profile(int(user_id), name, bio, position)
             if result:
                 return response(200, result)
             return response(404, {'error': 'user not found'})

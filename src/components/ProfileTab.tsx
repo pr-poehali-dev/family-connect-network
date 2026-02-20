@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -26,20 +26,27 @@ type ProfileTabProps = {
 
 export default function ProfileTab({ currentUser, onProfileUpdate }: ProfileTabProps) {
   const [name, setName] = useState(currentUser.name);
+  const [position, setPosition] = useState('');
   const [bio, setBio] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setName(currentUser.name);
+  }, [currentUser.name]);
 
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const result = await api.updateProfile(currentUser.id, name, bio);
-      if (result && onProfileUpdate) {
-        onProfileUpdate(result.name, result.initials);
+      const result = await api.updateProfile(currentUser.id, name, bio, position);
+      if (result) {
+        if (onProfileUpdate) {
+          onProfileUpdate(result.name, result.initials);
+        }
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
       }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error('Failed to save profile:', e);
     } finally {
@@ -60,6 +67,7 @@ export default function ProfileTab({ currentUser, onProfileUpdate }: ProfileTabP
             </Avatar>
             <div className="text-center">
               <h2 className="text-2xl font-bold mb-1">{currentUser.name}</h2>
+              {position && <p className="text-muted-foreground mb-2">{position}</p>}
               <Badge className="bg-primary text-white">
                 {currentUser.role === 'admin' ? 'Администратор' : 'Участник'}
               </Badge>
@@ -88,6 +96,16 @@ export default function ProfileTab({ currentUser, onProfileUpdate }: ProfileTabP
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="rounded-md border-2 mt-2"
+              />
+            </div>
+            <div>
+              <Label htmlFor="position">Должность</Label>
+              <Input
+                id="position"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                placeholder="Например: Руководитель отдела"
                 className="rounded-md border-2 mt-2"
               />
             </div>

@@ -212,17 +212,58 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
           {selectedChat ? (
             <>
               <CardHeader className="bg-primary text-white">
-                <CardTitle className="flex items-center gap-3">
-                  <div
-                    className="relative group cursor-pointer"
-                    onClick={(e) => handleAvatarClick(selectedChat.id, e)}
-                  >
-                    <ChatAvatar chat={selectedChat} size="sm" />
-                    <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Icon name="Camera" size={14} className="text-white" />
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="relative group cursor-pointer"
+                      onClick={(e) => handleAvatarClick(selectedChat.id, e)}
+                    >
+                      <ChatAvatar chat={selectedChat} size="sm" />
+                      <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Icon name="Camera" size={14} className="text-white" />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-white flex items-center gap-1">
+                        {!selectedChat.isGroup && <Icon name="Lock" size={14} />}
+                        {selectedChat.name}
+                      </span>
+                      <p className="text-white/60 text-xs font-normal">
+                        {selectedChat.isGroup ? 'Групповая беседа' : 'Приватная беседа'}
+                      </p>
                     </div>
                   </div>
-                  <span className="text-white">{selectedChat.name}</span>
+                  {selectedChat.isGroup && (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button size="icon" variant="ghost" className="text-white hover:bg-white/20 rounded-full">
+                          <Icon name="UserPlus" size={18} />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="rounded-lg">
+                        <DialogHeader>
+                          <DialogTitle>Пригласить в беседу</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-2 pt-4">
+                          {users.filter(u => u.id !== currentUser.id).map((user) => (
+                            <button
+                              key={user.id}
+                              className="w-full p-3 rounded-lg hover:bg-primary/5 transition-colors flex items-center gap-3 text-left"
+                            >
+                              <Avatar className="w-10 h-10 border border-primary/20">
+                                <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">{user.initials}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                <p className="font-medium">{user.name}</p>
+                                <p className="text-xs text-muted-foreground">{user.status === 'approved' ? 'Участник' : 'Ожидает'}</p>
+                              </div>
+                              <Icon name="Plus" size={18} className="text-primary" />
+                            </button>
+                          ))}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </CardTitle>
               </CardHeader>
               <ScrollArea className="h-[400px] p-4">
