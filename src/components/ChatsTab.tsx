@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
@@ -46,13 +46,16 @@ type ChatsTabProps = {
   setSelectedChat: (chat: Chat | null) => void;
   onCreateChat: (chatName: string, isGroup: boolean) => void;
   onSendMessage: (text: string) => void;
+  onChangeChatAvatar: (chatId: number, avatarUrl: string) => void;
 };
 
-export default function ChatsTab({ chats, messages, users, currentUser, selectedChat, setSelectedChat, onCreateChat, onSendMessage }: ChatsTabProps) {
+export default function ChatsTab({ chats, messages, users, currentUser, selectedChat, setSelectedChat, onCreateChat, onSendMessage, onChangeChatAvatar }: ChatsTabProps) {
   const [newChatName, setNewChatName] = useState('');
   const [isGroupChat, setIsGroupChat] = useState(true);
   const [messageText, setMessageText] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editingChatId, setEditingChatId] = useState<number | null>(null);
 
   const handleCreateChat = () => {
     if (newChatName.trim()) {
@@ -68,20 +71,64 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
       setMessageText('');
     }
   };
+
+  const handleAvatarClick = (chatId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChatId(chatId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && editingChatId !== null) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        onChangeChatAvatar(editingChatId, dataUrl);
+        setEditingChatId(null);
+      };
+      reader.readAsDataURL(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const ChatAvatar = ({ chat, size = 'md' }: { chat: Chat; size?: 'sm' | 'md' }) => {
+    const sizeClass = size === 'md' ? 'w-12 h-12' : 'w-10 h-10';
+    return (
+      <Avatar className={`${sizeClass} border-2 border-primary/20`}>
+        {chat.avatar ? (
+          <AvatarImage src={chat.avatar} alt={chat.name} className="object-cover" />
+        ) : null}
+        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+          {chat.isGroup ? <Icon name="Users" size={size === 'md' ? 20 : 18} /> : chat.name[0]}
+        </AvatarFallback>
+      </Avatar>
+    );
+  };
+
   return (
     <TabsContent value="chats" className="animate-fade-in">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
       <div className="grid lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-1 border-2 rounded-2xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-primary/30 to-accent/30">
+        <Card className="lg:col-span-1 border rounded-lg overflow-hidden">
+          <CardHeader className="bg-primary text-white">
             <CardTitle className="flex items-center justify-between">
               <span>Все беседы</span>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="icon" variant="ghost" className="rounded-full hover:bg-card/50">
+                  <Button size="icon" variant="ghost" className="rounded-full hover:bg-white/20 text-white">
                     <Icon name="Plus" size={20} />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="rounded-2xl">
+                <DialogContent className="rounded-lg">
                   <DialogHeader>
                     <DialogTitle>Создать новую беседу</DialogTitle>
                   </DialogHeader>
@@ -93,7 +140,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                         value={newChatName}
                         onChange={(e) => setNewChatName(e.target.value)}
                         placeholder="Например: Семейный чат"
-                        className="rounded-xl border-2 mt-2"
+                        className="rounded-md border-2 mt-2"
                       />
                     </div>
                     <div className="flex items-center justify-between">
@@ -106,7 +153,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                     </div>
                     <Button
                       onClick={handleCreateChat}
-                      className="w-full rounded-full bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+                      className="w-full rounded-md bg-primary text-white hover:bg-primary/90"
                     >
                       Создать
                     </Button>
@@ -121,21 +168,25 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                 <button
                   key={chat.id}
                   onClick={() => setSelectedChat(chat)}
-                  className={`w-full p-4 rounded-xl mb-2 transition-all hover:bg-muted ${
-                    selectedChat?.id === chat.id ? 'bg-primary/20 shadow-md' : ''
+                  className={`w-full p-4 rounded-lg mb-1 transition-all hover:bg-primary/5 ${
+                    selectedChat?.id === chat.id ? 'bg-primary/10 border-l-4 border-primary' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Avatar className="w-12 h-12 border-2 border-secondary">
-                      <AvatarFallback className="bg-accent">
-                        {chat.isGroup ? <Icon name="Users" size={20} /> : chat.name[0]}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div
+                      className="relative group cursor-pointer"
+                      onClick={(e) => handleAvatarClick(chat.id, e)}
+                    >
+                      <ChatAvatar chat={chat} />
+                      <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Icon name="Camera" size={16} className="text-white" />
+                      </div>
+                    </div>
                     <div className="flex-1 text-left">
                       <div className="flex items-center justify-between">
                         <p className="font-semibold">{chat.name}</p>
                         {chat.unread > 0 && (
-                          <Badge className="bg-destructive text-destructive-foreground rounded-full">
+                          <Badge className="bg-primary text-white rounded-full text-xs min-w-[22px] h-[22px] flex items-center justify-center">
                             {chat.unread}
                           </Badge>
                         )}
@@ -149,17 +200,21 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
           </ScrollArea>
         </Card>
 
-        <Card className="lg:col-span-2 border-2 rounded-2xl overflow-hidden">
+        <Card className="lg:col-span-2 border rounded-lg overflow-hidden">
           {selectedChat ? (
             <>
-              <CardHeader className="bg-gradient-to-r from-secondary/30 to-accent/30">
+              <CardHeader className="bg-primary text-white">
                 <CardTitle className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10 border-2 border-primary">
-                    <AvatarFallback className="bg-accent">
-                      {selectedChat.isGroup ? <Icon name="Users" size={20} /> : selectedChat.name[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  {selectedChat.name}
+                  <div
+                    className="relative group cursor-pointer"
+                    onClick={(e) => handleAvatarClick(selectedChat.id, e)}
+                  >
+                    <ChatAvatar chat={selectedChat} size="sm" />
+                    <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Icon name="Camera" size={14} className="text-white" />
+                    </div>
+                  </div>
+                  <span className="text-white">{selectedChat.name}</span>
                 </CardTitle>
               </CardHeader>
               <ScrollArea className="h-[400px] p-4">
@@ -169,20 +224,20 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                     const sender = users.find(u => u.id === msg.senderId);
                     return (
                       <div key={msg.id} className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                        <Avatar className="w-8 h-8 border-2 border-secondary">
-                          <AvatarFallback className="bg-accent text-xs">{sender?.initials}</AvatarFallback>
+                        <Avatar className="w-8 h-8 border border-border">
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{sender?.initials}</AvatarFallback>
                         </Avatar>
                         <div className={`max-w-[70%] ${isOwn ? 'items-end' : ''}`}>
                           <div
-                            className={`rounded-2xl p-3 ${
+                            className={`rounded-lg p-3 ${
                               isOwn
-                                ? 'bg-gradient-to-r from-primary to-secondary text-foreground'
+                                ? 'bg-primary text-white'
                                 : 'bg-muted'
                             }`}
                           >
                             <p>{msg.text}</p>
                             {msg.hasImage && (
-                              <div className="mt-2 bg-background/50 rounded-xl p-8 text-center text-3xl">
+                              <div className="mt-2 bg-background/50 rounded-lg p-8 text-center text-3xl">
                                 📷
                               </div>
                             )}
@@ -213,7 +268,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                   />
                   <Button 
                     size="icon" 
-                    className="rounded-full bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+                    className="rounded-full bg-primary text-white hover:bg-primary/90"
                     onClick={handleSendMessage}
                   >
                     <Icon name="Send" size={20} />
@@ -224,7 +279,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
           ) : (
             <CardContent className="h-[500px] flex items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <Icon name="MessageCircle" size={48} className="mx-auto mb-4 opacity-50" />
+                <Icon name="MessageCircle" size={48} className="mx-auto mb-4 text-primary/30" />
                 <p>Выберите беседу для начала общения</p>
               </div>
             </CardContent>
