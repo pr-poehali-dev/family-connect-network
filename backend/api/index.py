@@ -139,6 +139,22 @@ def get_users():
     conn.close()
     return [dict(r) for r in users]
 
+def update_user_profile(user_id, name, bio=None):
+    """Обновить профиль пользователя"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    initials = ''.join([w[0].upper() for w in name.split()[:2]]) if name else ''
+    cur.execute(f"""
+        UPDATE {SCHEMA}.users SET name = %s, initials = %s, bio = %s, updated_at = NOW()
+        WHERE id = %s
+        RETURNING id, name, initials, avatar_url, bio, status, role
+    """, (name, initials, bio, user_id))
+    user = cur.fetchone()
+    conn.commit()
+    cur.close()
+    conn.close()
+    return dict(user) if user else None
+
 def handler(event, context):
     """API для семейной соцсети — чаты, сообщения, посты, пользователи"""
     if event.get('httpMethod') == 'OPTIONS':
@@ -185,6 +201,16 @@ def handler(event, context):
             if not all([chat_id, avatar_url]):
                 return response(400, {'error': 'chat_id, avatar_url required'})
             return response(200, update_chat_avatar(int(chat_id), avatar_url))
+        elif action == 'update_profile':
+            user_id = body.get('user_id')
+            name = body.get('name')
+            bio = body.get('bio', '')
+            if not all([user_id, name]):
+                return response(400, {'error': 'user_id, name required'})
+            result = update_user_profile(int(user_id), name, bio)
+            if result:
+                return response(200, result)
+            return response(404, {'error': 'user not found'})
         else:
             return response(400, {'error': 'unknown action'})
 

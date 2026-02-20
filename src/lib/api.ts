@@ -28,6 +28,8 @@ export const api = {
     post('create_chat', { name, is_group: isGroup, created_by: createdBy }),
   updateChatAvatar: (chatId: number, avatarUrl: string) =>
     post('update_chat_avatar', { chat_id: chatId, avatar_url: avatarUrl }),
+  updateProfile: (userId: number, name: string, bio: string) =>
+    post('update_profile', { user_id: userId, name, bio }),
 };
 
 export default api;

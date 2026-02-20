@@ -139,7 +139,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                         id="chatName"
                         value={newChatName}
                         onChange={(e) => setNewChatName(e.target.value)}
-                        placeholder="Например: Семейный чат"
+                        placeholder="Название вашей беседы"
                         className="rounded-md border-2 mt-2"
                       />
                     </div>
@@ -151,6 +151,11 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                         onCheckedChange={setIsGroupChat}
                       />
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      {isGroupChat
+                        ? 'Групповая — все участники видят беседу'
+                        : 'Приватная — только вы и собеседник'}
+                    </p>
                     <Button
                       onClick={handleCreateChat}
                       className="w-full rounded-md bg-primary text-white hover:bg-primary/90"
@@ -184,7 +189,10 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                     </div>
                     <div className="flex-1 text-left">
                       <div className="flex items-center justify-between">
-                        <p className="font-semibold">{chat.name}</p>
+                        <p className="font-semibold flex items-center gap-1">
+                          {!chat.isGroup && <Icon name="Lock" size={14} className="text-muted-foreground" />}
+                          {chat.name}
+                        </p>
                         {chat.unread > 0 && (
                           <Badge className="bg-primary text-white rounded-full text-xs min-w-[22px] h-[22px] flex items-center justify-center">
                             {chat.unread}

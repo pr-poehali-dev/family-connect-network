@@ -223,7 +223,7 @@ export default function Index() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 bg-white rounded-md flex items-center justify-center mx-auto mb-4 shadow-sm border border-border overflow-hidden">
-            <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/8de415f5-89e5-465b-ae80-a322cd985a70.png" alt="А" className="w-7 h-7 object-contain" />
+            <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/8de415f5-89e5-465b-ae80-a322cd985a70.png" alt="А" className="w-9 h-9 object-contain" />
           </div>
           <p className="text-muted-foreground">Загрузка...</p>
         </div>
@@ -238,7 +238,7 @@ export default function Index() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white rounded-md flex items-center justify-center overflow-hidden">
-                <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/8de415f5-89e5-465b-ae80-a322cd985a70.png" alt="А" className="w-6 h-6 object-contain" />
+                <img src="https://cdn.poehali.dev/projects/d335f394-a349-4793-a473-36c20b52466b/bucket/8de415f5-89e5-465b-ae80-a322cd985a70.png" alt="А" className="w-8 h-8 object-contain" />
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">
                 {siteName}
@@ -332,7 +332,13 @@ export default function Index() {
             </Card>
           </TabsContent>
 
-          <ProfileTab currentUser={currentUserForComponents} />
+          <ProfileTab
+            currentUser={currentUserForComponents}
+            onProfileUpdate={(name, initials) => {
+              setCurrentUser(prev => ({ ...prev, name, initials }));
+              setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, name, initials } : u));
+            }}
+          />
 
           {currentUser.role === 'admin' && (
             <AdminTab
