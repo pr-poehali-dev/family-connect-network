@@ -22,9 +22,9 @@ export const api = {
     get({ action: 'approve_user', user_id: String(userId) }),
   rejectUser: (userId: number) =>
     get({ action: 'reject_user', user_id: String(userId) }),
-  getChats: () => get({ action: 'chats' }),
-  getMessages: (chatId: number) =>
-    get({ action: 'messages', chat_id: String(chatId) }),
+  getChats: (userId: number) => get({ action: 'chats', user_id: String(userId) }),
+  getMessages: (chatId: number, userId: number) =>
+    get({ action: 'messages', chat_id: String(chatId), user_id: String(userId) }),
   getUsers: () => get({ action: 'users' }),
   getPosts: () => get({ action: 'posts' }),
   sendMessage: (chatId: number, senderId: number, text: string, images?: string[]) =>
@@ -47,6 +47,12 @@ export const api = {
     get({ action: 'join_chat', chat_id: String(chatId), user_id: String(userId) }),
   updateProfile: (userId: number, name: string, bio: string, position: string) =>
     get({ action: 'update_profile', user_id: String(userId), name, bio, position }),
+  toggleLike: (postId: number, userId: number) =>
+    get({ action: 'toggle_like', post_id: String(postId), user_id: String(userId) }),
+  getComments: (postId: number) =>
+    get({ action: 'get_comments', post_id: String(postId) }),
+  addComment: (postId: number, userId: number, text: string) =>
+    get({ action: 'add_comment', post_id: String(postId), user_id: String(userId), text }),
 };
 
 export default api;

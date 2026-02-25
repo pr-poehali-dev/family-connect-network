@@ -109,7 +109,7 @@ def reject_user(user_id):
     return dict(user) if user else None
 
 def get_chats(user_id):
-    """Получить все беседы"""
+    """Получить беседы только тех чатов, в которых состоит пользователь"""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(f"""
@@ -122,14 +122,25 @@ def get_chats(user_id):
             ) as last_message,
             0 as unread
         FROM {SCHEMA}.chats c
+        JOIN {SCHEMA}.chat_members cm ON cm.chat_id = c.id
+        WHERE cm.user_id = %s
         ORDER BY c.updated_at DESC
-    """)
+    """, (user_id,))
     chats = cur.fetchall()
     cur.close()
     conn.close()
     return [dict(r) for r in chats]
 
-def get_messages(chat_id):
+def get_messages(chat_id, user_id=None):
+    """Получить сообщения беседы — только если пользователь является участником"""
+    if user_id:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"SELECT 1 FROM {SCHEMA}.chat_members WHERE chat_id = %s AND user_id = %s", (chat_id, user_id))
+        member = cur.fetchone()
+        cur.close(); conn.close()
+        if not member:
+            return None
     """Получить сообщения беседы"""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -335,6 +346,72 @@ def update_chat_avatar(chat_id, avatar_url):
     conn.close()
     return {'success': True}
 
+def toggle_like(post_id, user_id):
+    """Поставить или убрать лайк"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"SELECT id FROM {SCHEMA}.post_likes WHERE post_id = %s AND user_id = %s", (post_id, user_id))
+    existing = cur.fetchone()
+    if existing:
+        cur.execute(f"DELETE FROM {SCHEMA}.post_likes WHERE post_id = %s AND user_id = %s", (post_id, user_id))
+        cur.execute(f"UPDATE {SCHEMA}.posts SET likes_count = GREATEST(0, likes_count - 1) WHERE id = %s RETURNING likes_count", (post_id,))
+        liked = False
+    else:
+        cur.execute(f"INSERT INTO {SCHEMA}.post_likes (post_id, user_id) VALUES (%s, %s)", (post_id, user_id))
+        cur.execute(f"UPDATE {SCHEMA}.posts SET likes_count = likes_count + 1 WHERE id = %s RETURNING likes_count", (post_id,))
+        liked = True
+    row = cur.fetchone()
+    conn.commit()
+    cur.close(); conn.close()
+    return {'liked': liked, 'likes_count': row['likes_count']}
+
+def get_post_likes(post_id, user_id):
+    """Проверить, лайкнул ли пользователь пост"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT 1 FROM {SCHEMA}.post_likes WHERE post_id = %s AND user_id = %s", (post_id, user_id))
+    liked = cur.fetchone() is not None
+    cur.close(); conn.close()
+    return {'liked': liked}
+
+def get_comments(post_id):
+    """Получить комментарии к посту"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        SELECT c.id, c.post_id, c.user_id, c.text, c.created_at,
+            u.name as user_name, u.initials as user_initials
+        FROM {SCHEMA}.post_comments c
+        JOIN {SCHEMA}.users u ON u.id = c.user_id
+        WHERE c.post_id = %s
+        ORDER BY c.created_at ASC
+    """, (post_id,))
+    comments = cur.fetchall()
+    cur.close(); conn.close()
+    return [dict(r) for r in comments]
+
+def add_comment(post_id, user_id, text):
+    """Добавить комментарий"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.post_comments (post_id, user_id, text)
+        VALUES (%s, %s, %s)
+        RETURNING id, post_id, user_id, text, created_at
+    """, (post_id, user_id, text))
+    comment = dict(cur.fetchone())
+    cur.execute(f"UPDATE {SCHEMA}.posts SET comments_count = comments_count + 1 WHERE id = %s RETURNING comments_count", (post_id,))
+    row = cur.fetchone()
+    comment['comments_count'] = row['comments_count']
+    cur.execute(f"SELECT name, initials FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+    u = cur.fetchone()
+    if u:
+        comment['user_name'] = u['name']
+        comment['user_initials'] = u['initials']
+    conn.commit()
+    cur.close(); conn.close()
+    return comment
+
 def get_posts():
     """Получить посты"""
     conn = get_conn()
@@ -411,9 +488,13 @@ def handler(event, context):
 
     elif action == 'messages':
         chat_id = p.get('chat_id')
+        user_id = p.get('user_id')
         if not chat_id:
             return response(400, {'error': 'chat_id required'})
-        return response(200, get_messages(int(chat_id)))
+        result = get_messages(int(chat_id), int(user_id) if user_id else None)
+        if result is None:
+            return response(403, {'error': 'Доступ запрещён: вы не участник этой беседы'})
+        return response(200, result)
 
     elif action == 'posts':
         return response(200, get_posts())
@@ -550,6 +631,27 @@ def handler(event, context):
         if result:
             return response(200, result)
         return response(404, {'error': 'user not found'})
+
+    elif action == 'toggle_like':
+        post_id = p.get('post_id')
+        user_id = p.get('user_id')
+        if not all([post_id, user_id]):
+            return response(400, {'error': 'post_id, user_id required'})
+        return response(200, toggle_like(int(post_id), int(user_id)))
+
+    elif action == 'get_comments':
+        post_id = p.get('post_id')
+        if not post_id:
+            return response(400, {'error': 'post_id required'})
+        return response(200, get_comments(int(post_id)))
+
+    elif action == 'add_comment':
+        post_id = p.get('post_id')
+        user_id = p.get('user_id')
+        text = p.get('text', '').strip()
+        if not all([post_id, user_id, text]):
+            return response(400, {'error': 'post_id, user_id, text required'})
+        return response(200, add_comment(int(post_id), int(user_id), text))
 
     else:
         return response(200, {'status': 'ok'})

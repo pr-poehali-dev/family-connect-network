@@ -37,6 +37,12 @@
       "method": "GET",
       "path": "/?action=public_chats&user_id=1",
       "expectedStatus": 200
+    },
+    {
+      "name": "Get comments",
+      "method": "GET",
+      "path": "/?action=get_comments&post_id=1",
+      "expectedStatus": 200
     }
   ]
 }

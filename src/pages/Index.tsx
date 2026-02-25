@@ -82,6 +82,7 @@ type Post = {
   timestamp: string;
   likes: number;
   comments: number;
+  likedByMe?: boolean;
 };
 
 function formatTime(dateStr: string) {
@@ -161,7 +162,7 @@ export default function Index() {
       try {
         const [dbUsers, dbChats, dbPosts] = await Promise.all([
           api.getUsers(),
-          api.getChats(),
+          api.getChats(authedUser.id),
           api.getPosts(),
         ]);
         const mappedUsers = dbUsers.map((u: Record<string, unknown>) => ({
@@ -194,8 +195,8 @@ export default function Index() {
   }, [authedUser?.id]);
 
   useEffect(() => {
-    if (!selectedChat) return;
-    api.getMessages(selectedChat.id).then((dbMsgs: DbMessage[]) => {
+    if (!selectedChat || !currentUser) return;
+    api.getMessages(selectedChat.id, currentUser.id).then((dbMsgs: DbMessage[]) => {
       setMessages(dbMsgs.map(mapMessage));
     }).catch(console.error);
   }, [selectedChat?.id]);
@@ -225,6 +226,23 @@ export default function Index() {
       const dbPost = await api.createPost(currentUser.id, text, images);
       setPosts(prev => [mapPost(dbPost), ...prev]);
     } catch (e) { console.error(e); }
+  }, [currentUser?.id]);
+
+  const handleToggleLike = useCallback(async (postId: number) => {
+    if (!currentUser) return;
+    try {
+      const result = await api.toggleLike(postId, currentUser.id);
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: result.likes_count, likedByMe: result.liked } : p));
+    } catch (e) { console.error(e); }
+  }, [currentUser?.id]);
+
+  const handleAddComment = useCallback(async (postId: number, text: string) => {
+    if (!currentUser) return;
+    try {
+      const comment = await api.addComment(postId, currentUser.id, text);
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: comment.comments_count } : p));
+      return comment;
+    } catch (e) { console.error(e); return null; }
   }, [currentUser?.id]);
 
   const handleChangeChatAvatar = useCallback(async (chatId: number, avatarUrl: string) => {
@@ -335,7 +353,14 @@ export default function Index() {
             )}
           </TabsList>
 
-          <HomeTab posts={posts} users={usersForComponents} onCreatePost={handleCreatePost} />
+          <HomeTab
+            posts={posts}
+            users={usersForComponents}
+            currentUserId={currentUser?.id}
+            onCreatePost={handleCreatePost}
+            onToggleLike={handleToggleLike}
+            onAddComment={handleAddComment}
+          />
 
           <ChatsTab
             chats={chats}
