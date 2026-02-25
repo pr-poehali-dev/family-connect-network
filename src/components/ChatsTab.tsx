@@ -27,6 +27,7 @@ type Message = {
   timestamp: string;
   hasImage?: boolean;
   imageUrl?: string;
+  images?: string[];
 };
 
 type Chat = {
@@ -46,7 +47,7 @@ type ChatsTabProps = {
   selectedChat: Chat | null;
   setSelectedChat: (chat: Chat | null) => void;
   onCreateChat: (chatName: string, isGroup: boolean) => void;
-  onSendMessage: (text: string, imageUrl?: string) => void;
+  onSendMessage: (text: string, images?: string[]) => void;
   onChangeChatAvatar: (chatId: number, avatarUrl: string) => void;
 };
 
@@ -54,7 +55,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
   const [newChatName, setNewChatName] = useState('');
   const [isGroupChat, setIsGroupChat] = useState(true);
   const [messageText, setMessageText] = useState('');
-  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
@@ -69,10 +70,10 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
   };
 
   const handleSendMessage = () => {
-    if (messageText.trim() || pendingImage) {
-      onSendMessage(messageText, pendingImage || undefined);
+    if (messageText.trim() || pendingImages.length > 0) {
+      onSendMessage(messageText, pendingImages.length > 0 ? pendingImages : undefined);
       setMessageText('');
-      setPendingImage(null);
+      setPendingImages([]);
     }
   };
 
@@ -96,14 +97,19 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
     if (avatarFileInputRef.current) avatarFileInputRef.current.value = '';
   };
 
+  const addFiles = (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    arr.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setPendingImages(prev => [...prev, ev.target?.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleMediaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setPendingImage(ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (e.target.files && e.target.files.length > 0) addFiles(e.target.files);
     if (mediaFileInputRef.current) mediaFileInputRef.current.value = '';
   };
 
@@ -111,13 +117,13 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
+      if (item.type.startsWith('image/') || item.type.startsWith('video/')) {
         e.preventDefault();
         const file = item.getAsFile();
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (ev) => {
-          setPendingImage(ev.target?.result as string);
+          setPendingImages(prev => [...prev, ev.target?.result as string]);
         };
         reader.readAsDataURL(file);
         break;
@@ -142,7 +148,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
   return (
     <TabsContent value="chats" className="animate-fade-in">
       <input ref={avatarFileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleAvatarFileChange} />
-      <input ref={mediaFileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleMediaFileChange} />
+      <input ref={mediaFileInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleMediaFileChange} />
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1 border rounded-lg overflow-hidden">
           <CardHeader className="bg-primary text-white">
@@ -287,27 +293,29 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                         <div className={`max-w-[70%] ${isOwn ? 'items-end' : ''}`}>
                           <div className={`rounded-lg p-3 ${isOwn ? 'bg-primary text-white' : 'bg-muted'}`}>
                             {msg.text && <p>{msg.text}</p>}
-                            {msg.imageUrl && (
-                              <div className="mt-2">
-                                {msg.imageUrl.startsWith('data:video') || msg.imageUrl.match(/\.(mp4|webm|ogg|mov)$/i) ? (
-                                  <video
-                                    src={msg.imageUrl}
-                                    controls
-                                    className="max-w-full rounded-lg max-h-64"
-                                  />
-                                ) : (
-                                  <img
-                                    src={msg.imageUrl}
-                                    alt="вложение"
-                                    className="max-w-full rounded-lg max-h-64 object-contain cursor-pointer"
-                                    onClick={() => window.open(msg.imageUrl, '_blank')}
-                                  />
-                                )}
-                              </div>
-                            )}
-                            {msg.hasImage && !msg.imageUrl && (
-                              <div className="mt-2 bg-background/50 rounded-lg p-4 text-center text-2xl">📷</div>
-                            )}
+                            {(() => {
+                              const imgs = msg.images && msg.images.length > 0 ? msg.images : (msg.imageUrl ? [msg.imageUrl] : []);
+                              if (imgs.length === 0 && msg.hasImage) return <div className="mt-2 bg-background/50 rounded-lg p-4 text-center text-2xl">📷</div>;
+                              if (imgs.length === 0) return null;
+                              return (
+                                <div className={`mt-2 grid gap-1 ${imgs.length === 1 ? 'grid-cols-1' : imgs.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                  {imgs.map((src, i) => (
+                                    src.startsWith('data:video') || src.match(/\.(mp4|webm|ogg|mov)$/i) ? (
+                                      <video key={i} src={src} controls className="w-full rounded-lg max-h-48 object-cover" />
+                                    ) : (
+                                      <img
+                                        key={i}
+                                        src={src}
+                                        alt={`вложение ${i + 1}`}
+                                        className="w-full rounded-lg object-cover cursor-pointer"
+                                        style={{ maxHeight: imgs.length === 1 ? '240px' : '120px' }}
+                                        onClick={() => window.open(src, '_blank')}
+                                      />
+                                    )
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1 px-2">{msg.timestamp}</p>
                         </div>
@@ -317,19 +325,23 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                 </div>
               </ScrollArea>
               <CardContent className="pt-3 border-t">
-                {pendingImage && (
-                  <div className="relative mb-2 inline-block">
-                    {pendingImage.startsWith('data:video') ? (
-                      <video src={pendingImage} className="h-20 rounded-lg" controls />
-                    ) : (
-                      <img src={pendingImage} alt="preview" className="h-20 rounded-lg object-cover" />
-                    )}
-                    <button
-                      onClick={() => setPendingImage(null)}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-white rounded-full flex items-center justify-center text-xs"
-                    >
-                      ×
-                    </button>
+                {pendingImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {pendingImages.map((src, i) => (
+                      <div key={i} className="relative inline-block">
+                        {src.startsWith('data:video') ? (
+                          <video src={src} className="h-16 w-16 rounded-lg object-cover" />
+                        ) : (
+                          <img src={src} alt="preview" className="h-16 w-16 rounded-lg object-cover" />
+                        )}
+                        <button
+                          onClick={() => setPendingImages(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-destructive text-white rounded-full flex items-center justify-center text-xs font-bold"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -359,7 +371,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                     size="icon"
                     className="rounded-full bg-primary text-white hover:bg-primary/90"
                     onClick={handleSendMessage}
-                    disabled={!messageText.trim() && !pendingImage}
+                    disabled={!messageText.trim() && pendingImages.length === 0}
                   >
                     <Icon name="Send" size={20} />
                   </Button>

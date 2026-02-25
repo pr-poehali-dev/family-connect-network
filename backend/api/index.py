@@ -135,7 +135,7 @@ def get_messages(chat_id):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(f"""
         SELECT m.id, m.chat_id, m.sender_id, m.text, m.has_image, m.image_url,
-            m.created_at,
+            m.images, m.created_at,
             u.name as sender_name, u.initials as sender_initials
         FROM {SCHEMA}.messages m
         JOIN {SCHEMA}.users u ON u.id = m.sender_id
@@ -145,39 +145,54 @@ def get_messages(chat_id):
     messages = cur.fetchall()
     cur.close()
     conn.close()
-    return [dict(r) for r in messages]
+    result = []
+    for r in messages:
+        d = dict(r)
+        if not d.get('images'):
+            d['images'] = []
+        result.append(d)
+    return result
 
-def send_message(chat_id, sender_id, text, image_url=None):
-    """Отправить сообщение"""
+def send_message(chat_id, sender_id, text, images=None):
+    """Отправить сообщение (images — список dataURL/URL)"""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    has_image = bool(image_url)
+    if images is None:
+        images = []
+    has_image = len(images) > 0
+    image_url = images[0] if images else None
     cur.execute(f"""
-        INSERT INTO {SCHEMA}.messages (chat_id, sender_id, text, has_image, image_url)
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id, chat_id, sender_id, text, has_image, image_url, created_at
-    """, (chat_id, sender_id, text, has_image, image_url))
+        INSERT INTO {SCHEMA}.messages (chat_id, sender_id, text, has_image, image_url, images)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id, chat_id, sender_id, text, has_image, image_url, images, created_at
+    """, (chat_id, sender_id, text, has_image, image_url, json.dumps(images)))
     msg = dict(cur.fetchone())
+    if not msg.get('images'):
+        msg['images'] = []
     cur.execute(f"UPDATE {SCHEMA}.chats SET updated_at = NOW() WHERE id = %s", (chat_id,))
     conn.commit()
     cur.close()
     conn.close()
     return msg
 
-def create_post(user_id, text, image_url=None):
-    """Создать публикацию"""
+def create_post(user_id, text, images=None):
+    """Создать публикацию (images — список dataURL/URL)"""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if images is None:
+        images = []
+    image_url = images[0] if images else None
     cur.execute(f"""
-        INSERT INTO {SCHEMA}.posts (user_id, text, image_url)
-        VALUES (%s, %s, %s)
-        RETURNING id, user_id, text, image_url, likes_count, comments_count, created_at
-    """, (user_id, text, image_url))
+        INSERT INTO {SCHEMA}.posts (user_id, text, image_url, images)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id, user_id, text, image_url, images, likes_count, comments_count, created_at
+    """, (user_id, text, image_url, json.dumps(images)))
     post = dict(cur.fetchone())
+    if not post.get('images'):
+        post['images'] = []
     conn.commit()
     cur.close()
     conn.close()
-    cur2 = get_conn().cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     conn2 = get_conn()
     cur2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur2.execute(f"SELECT name, initials FROM {SCHEMA}.users WHERE id = %s", (user_id,))
@@ -325,7 +340,7 @@ def get_posts():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(f"""
-        SELECT p.id, p.user_id, p.text, p.image_url, p.likes_count, p.comments_count,
+        SELECT p.id, p.user_id, p.text, p.image_url, p.images, p.likes_count, p.comments_count,
             p.created_at, u.name as user_name, u.initials as user_initials
         FROM {SCHEMA}.posts p
         JOIN {SCHEMA}.users u ON u.id = p.user_id
@@ -334,7 +349,13 @@ def get_posts():
     posts = cur.fetchall()
     cur.close()
     conn.close()
-    return [dict(r) for r in posts]
+    result = []
+    for r in posts:
+        d = dict(r)
+        if not d.get('images'):
+            d['images'] = []
+        result.append(d)
+    return result
 
 def get_users():
     """Получить всех пользователей"""
@@ -444,18 +465,22 @@ def handler(event, context):
         chat_id = p.get('chat_id')
         sender_id = p.get('sender_id')
         text = p.get('text', '')
-        image_url = p.get('image_url', None)
-        if not all([chat_id, sender_id]) or (not text and not image_url):
-            return response(400, {'error': 'chat_id, sender_id и text или image_url required'})
-        return response(200, send_message(int(chat_id), int(sender_id), text, image_url))
+        images_raw = p.get('images', [])
+        if isinstance(images_raw, str):
+            images_raw = json.loads(images_raw) if images_raw else []
+        if not all([chat_id, sender_id]) or (not text and not images_raw):
+            return response(400, {'error': 'chat_id, sender_id и text или images required'})
+        return response(200, send_message(int(chat_id), int(sender_id), text, images_raw))
 
     elif action == 'create_post':
         user_id = p.get('user_id')
         text = p.get('text', '')
-        image_url = p.get('image_url', None)
-        if not user_id or (not text and not image_url):
-            return response(400, {'error': 'user_id и text или image_url required'})
-        return response(200, create_post(int(user_id), text, image_url))
+        images_raw = p.get('images', [])
+        if isinstance(images_raw, str):
+            images_raw = json.loads(images_raw) if images_raw else []
+        if not user_id or (not text and not images_raw):
+            return response(400, {'error': 'user_id и text или images required'})
+        return response(200, create_post(int(user_id), text, images_raw))
 
     elif action == 'create_chat':
         name = p.get('name', '')
