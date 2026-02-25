@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -26,6 +26,7 @@ type Message = {
   text: string;
   timestamp: string;
   hasImage?: boolean;
+  imageUrl?: string;
 };
 
 type Chat = {
@@ -45,7 +46,7 @@ type ChatsTabProps = {
   selectedChat: Chat | null;
   setSelectedChat: (chat: Chat | null) => void;
   onCreateChat: (chatName: string, isGroup: boolean) => void;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, imageUrl?: string) => void;
   onChangeChatAvatar: (chatId: number, avatarUrl: string) => void;
 };
 
@@ -53,8 +54,10 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
   const [newChatName, setNewChatName] = useState('');
   const [isGroupChat, setIsGroupChat] = useState(true);
   const [messageText, setMessageText] = useState('');
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const mediaFileInputRef = useRef<HTMLInputElement>(null);
   const [editingChatId, setEditingChatId] = useState<number | null>(null);
 
   const handleCreateChat = () => {
@@ -66,19 +69,20 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
   };
 
   const handleSendMessage = () => {
-    if (messageText.trim()) {
-      onSendMessage(messageText);
+    if (messageText.trim() || pendingImage) {
+      onSendMessage(messageText, pendingImage || undefined);
       setMessageText('');
+      setPendingImage(null);
     }
   };
 
   const handleAvatarClick = (chatId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingChatId(chatId);
-    fileInputRef.current?.click();
+    avatarFileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && editingChatId !== null) {
       const reader = new FileReader();
@@ -89,10 +93,37 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
       };
       reader.readAsDataURL(file);
     }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (avatarFileInputRef.current) avatarFileInputRef.current.value = '';
   };
+
+  const handleMediaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setPendingImage(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+    if (mediaFileInputRef.current) mediaFileInputRef.current.value = '';
+  };
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          setPendingImage(ev.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  }, []);
 
   const ChatAvatar = ({ chat, size = 'md' }: { chat: Chat; size?: 'sm' | 'md' }) => {
     const sizeClass = size === 'md' ? 'w-12 h-12' : 'w-10 h-10';
@@ -110,13 +141,8 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
 
   return (
     <TabsContent value="chats" className="animate-fade-in">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
+      <input ref={avatarFileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleAvatarFileChange} />
+      <input ref={mediaFileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleMediaFileChange} />
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1 border rounded-lg overflow-hidden">
           <CardHeader className="bg-primary text-white">
@@ -145,21 +171,12 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                     </div>
                     <div className="flex items-center justify-between">
                       <Label htmlFor="isGroup">Групповая беседа</Label>
-                      <Switch
-                        id="isGroup"
-                        checked={isGroupChat}
-                        onCheckedChange={setIsGroupChat}
-                      />
+                      <Switch id="isGroup" checked={isGroupChat} onCheckedChange={setIsGroupChat} />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {isGroupChat
-                        ? 'Групповая — все участники видят беседу'
-                        : 'Приватная — только вы и собеседник'}
+                      {isGroupChat ? 'Групповая — все участники видят беседу' : 'Приватная — только вы и собеседник'}
                     </p>
-                    <Button
-                      onClick={handleCreateChat}
-                      className="w-full rounded-md bg-primary text-white hover:bg-primary/90"
-                    >
+                    <Button onClick={handleCreateChat} className="w-full rounded-md bg-primary text-white hover:bg-primary/90">
                       Создать
                     </Button>
                   </div>
@@ -178,10 +195,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className="relative group cursor-pointer"
-                      onClick={(e) => handleAvatarClick(chat.id, e)}
-                    >
+                    <div className="relative group cursor-pointer" onClick={(e) => handleAvatarClick(chat.id, e)}>
                       <ChatAvatar chat={chat} />
                       <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Icon name="Camera" size={16} className="text-white" />
@@ -214,10 +228,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
               <CardHeader className="bg-primary text-white">
                 <CardTitle className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div
-                      className="relative group cursor-pointer"
-                      onClick={(e) => handleAvatarClick(selectedChat.id, e)}
-                    >
+                    <div className="relative group cursor-pointer" onClick={(e) => handleAvatarClick(selectedChat.id, e)}>
                       <ChatAvatar chat={selectedChat} size="sm" />
                       <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Icon name="Camera" size={14} className="text-white" />
@@ -246,10 +257,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                         </DialogHeader>
                         <div className="space-y-2 pt-4">
                           {users.filter(u => u.id !== currentUser.id).map((user) => (
-                            <button
-                              key={user.id}
-                              className="w-full p-3 rounded-lg hover:bg-primary/5 transition-colors flex items-center gap-3 text-left"
-                            >
+                            <button key={user.id} className="w-full p-3 rounded-lg hover:bg-primary/5 transition-colors flex items-center gap-3 text-left">
                               <Avatar className="w-10 h-10 border border-primary/20">
                                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">{user.initials}</AvatarFallback>
                               </Avatar>
@@ -277,18 +285,28 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                           <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{sender?.initials}</AvatarFallback>
                         </Avatar>
                         <div className={`max-w-[70%] ${isOwn ? 'items-end' : ''}`}>
-                          <div
-                            className={`rounded-lg p-3 ${
-                              isOwn
-                                ? 'bg-primary text-white'
-                                : 'bg-muted'
-                            }`}
-                          >
-                            <p>{msg.text}</p>
-                            {msg.hasImage && (
-                              <div className="mt-2 bg-background/50 rounded-lg p-8 text-center text-3xl">
-                                📷
+                          <div className={`rounded-lg p-3 ${isOwn ? 'bg-primary text-white' : 'bg-muted'}`}>
+                            {msg.text && <p>{msg.text}</p>}
+                            {msg.imageUrl && (
+                              <div className="mt-2">
+                                {msg.imageUrl.startsWith('data:video') || msg.imageUrl.match(/\.(mp4|webm|ogg|mov)$/i) ? (
+                                  <video
+                                    src={msg.imageUrl}
+                                    controls
+                                    className="max-w-full rounded-lg max-h-64"
+                                  />
+                                ) : (
+                                  <img
+                                    src={msg.imageUrl}
+                                    alt="вложение"
+                                    className="max-w-full rounded-lg max-h-64 object-contain cursor-pointer"
+                                    onClick={() => window.open(msg.imageUrl, '_blank')}
+                                  />
+                                )}
                               </div>
+                            )}
+                            {msg.hasImage && !msg.imageUrl && (
+                              <div className="mt-2 bg-background/50 rounded-lg p-4 text-center text-2xl">📷</div>
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1 px-2">{msg.timestamp}</p>
@@ -298,16 +316,38 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                   })}
                 </div>
               </ScrollArea>
-              <CardContent className="pt-4 border-t">
+              <CardContent className="pt-3 border-t">
+                {pendingImage && (
+                  <div className="relative mb-2 inline-block">
+                    {pendingImage.startsWith('data:video') ? (
+                      <video src={pendingImage} className="h-20 rounded-lg" controls />
+                    ) : (
+                      <img src={pendingImage} alt="preview" className="h-20 rounded-lg object-cover" />
+                    )}
+                    <button
+                      onClick={() => setPendingImage(null)}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-white rounded-full flex items-center justify-center text-xs"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
                 <div className="flex gap-2">
-                  <Button size="icon" variant="outline" className="rounded-full hover:scale-105 transition-transform duration-200">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="rounded-full hover:scale-105 transition-transform duration-200"
+                    onClick={() => mediaFileInputRef.current?.click()}
+                    title="Прикрепить фото или видео"
+                  >
                     <Icon name="Paperclip" size={20} />
                   </Button>
                   <Input
-                    placeholder="Написать сообщение..."
+                    placeholder="Написать сообщение... (Ctrl+V для вставки фото)"
                     className="flex-1 rounded-full border-2"
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
+                    onPaste={handlePaste}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -315,10 +355,11 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                       }
                     }}
                   />
-                  <Button 
-                    size="icon" 
+                  <Button
+                    size="icon"
                     className="rounded-full bg-primary text-white hover:bg-primary/90"
                     onClick={handleSendMessage}
+                    disabled={!messageText.trim() && !pendingImage}
                   >
                     <Icon name="Send" size={20} />
                   </Button>

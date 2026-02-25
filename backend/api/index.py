@@ -147,21 +147,46 @@ def get_messages(chat_id):
     conn.close()
     return [dict(r) for r in messages]
 
-def send_message(chat_id, sender_id, text):
+def send_message(chat_id, sender_id, text, image_url=None):
     """Отправить сообщение"""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    has_image = bool(image_url)
     cur.execute(f"""
-        INSERT INTO {SCHEMA}.messages (chat_id, sender_id, text)
-        VALUES (%s, %s, %s)
+        INSERT INTO {SCHEMA}.messages (chat_id, sender_id, text, has_image, image_url)
+        VALUES (%s, %s, %s, %s, %s)
         RETURNING id, chat_id, sender_id, text, has_image, image_url, created_at
-    """, (chat_id, sender_id, text))
+    """, (chat_id, sender_id, text, has_image, image_url))
     msg = dict(cur.fetchone())
     cur.execute(f"UPDATE {SCHEMA}.chats SET updated_at = NOW() WHERE id = %s", (chat_id,))
     conn.commit()
     cur.close()
     conn.close()
     return msg
+
+def create_post(user_id, text, image_url=None):
+    """Создать публикацию"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.posts (user_id, text, image_url)
+        VALUES (%s, %s, %s)
+        RETURNING id, user_id, text, image_url, likes_count, comments_count, created_at
+    """, (user_id, text, image_url))
+    post = dict(cur.fetchone())
+    conn.commit()
+    cur.close()
+    conn.close()
+    cur2 = get_conn().cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    conn2 = get_conn()
+    cur2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur2.execute(f"SELECT name, initials FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+    u = cur2.fetchone()
+    cur2.close(); conn2.close()
+    if u:
+        post['user_name'] = u['name']
+        post['user_initials'] = u['initials']
+    return post
 
 def create_chat(name, is_group, created_by, is_private=False):
     """Создать новую беседу"""
@@ -419,9 +444,18 @@ def handler(event, context):
         chat_id = p.get('chat_id')
         sender_id = p.get('sender_id')
         text = p.get('text', '')
-        if not all([chat_id, sender_id, text]):
-            return response(400, {'error': 'chat_id, sender_id, text required'})
-        return response(200, send_message(int(chat_id), int(sender_id), text))
+        image_url = p.get('image_url', None)
+        if not all([chat_id, sender_id]) or (not text and not image_url):
+            return response(400, {'error': 'chat_id, sender_id и text или image_url required'})
+        return response(200, send_message(int(chat_id), int(sender_id), text, image_url))
+
+    elif action == 'create_post':
+        user_id = p.get('user_id')
+        text = p.get('text', '')
+        image_url = p.get('image_url', None)
+        if not user_id or (not text and not image_url):
+            return response(400, {'error': 'user_id и text или image_url required'})
+        return response(200, create_post(int(user_id), text, image_url))
 
     elif action == 'create_chat':
         name = p.get('name', '')

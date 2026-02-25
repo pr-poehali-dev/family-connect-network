@@ -39,6 +39,7 @@ type Message = {
   text: string;
   timestamp: string;
   hasImage?: boolean;
+  imageUrl?: string;
 };
 
 type DbChat = {
@@ -102,7 +103,7 @@ function mapChat(c: DbChat): Chat {
   return { id: c.id, name: c.name, avatar: c.avatar_url || '', lastMessage: c.last_message || '', unread: c.unread, isGroup: c.is_group };
 }
 function mapMessage(m: DbMessage): Message {
-  return { id: m.id, senderId: m.sender_id, text: m.text, timestamp: formatTime(m.created_at), hasImage: m.has_image };
+  return { id: m.id, senderId: m.sender_id, text: m.text, timestamp: formatTime(m.created_at), hasImage: m.has_image, imageUrl: m.image_url || undefined };
 }
 function mapPost(p: DbPost): Post {
   return { id: p.id, userId: p.user_id, text: p.text, image: p.image_url || undefined, timestamp: timeAgo(p.created_at), likes: p.likes_count, comments: p.comments_count };
@@ -204,14 +205,22 @@ export default function Index() {
     } catch (e) { console.error(e); }
   }, [currentUser?.id]);
 
-  const handleSendMessage = useCallback(async (text: string) => {
-    if (!selectedChat || !text.trim() || !currentUser) return;
+  const handleSendMessage = useCallback(async (text: string, imageUrl?: string) => {
+    if (!selectedChat || (!text.trim() && !imageUrl) || !currentUser) return;
     try {
-      const dbMsg = await api.sendMessage(selectedChat.id, currentUser.id, text);
-      setMessages(prev => [...prev, { id: dbMsg.id, senderId: dbMsg.sender_id, text: dbMsg.text, timestamp: formatTime(dbMsg.created_at) }]);
-      setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, lastMessage: text } : c));
+      const dbMsg = await api.sendMessage(selectedChat.id, currentUser.id, text, imageUrl);
+      setMessages(prev => [...prev, { id: dbMsg.id, senderId: dbMsg.sender_id, text: dbMsg.text, timestamp: formatTime(dbMsg.created_at), hasImage: dbMsg.has_image, imageUrl: dbMsg.image_url || undefined }]);
+      setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, lastMessage: text || '📷 Фото' } : c));
     } catch (e) { console.error(e); }
   }, [selectedChat, currentUser?.id]);
+
+  const handleCreatePost = useCallback(async (text: string, imageUrl?: string) => {
+    if (!currentUser) return;
+    try {
+      const dbPost = await api.createPost(currentUser.id, text, imageUrl);
+      setPosts(prev => [mapPost(dbPost), ...prev]);
+    } catch (e) { console.error(e); }
+  }, [currentUser?.id]);
 
   const handleChangeChatAvatar = useCallback(async (chatId: number, avatarUrl: string) => {
     try {
@@ -321,7 +330,7 @@ export default function Index() {
             )}
           </TabsList>
 
-          <HomeTab posts={posts} users={usersForComponents} />
+          <HomeTab posts={posts} users={usersForComponents} currentUser={currentUserForComponents} onCreatePost={handleCreatePost} />
 
           <ChatsTab
             chats={chats}

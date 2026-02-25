@@ -27,8 +27,10 @@ export const api = {
     get({ action: 'messages', chat_id: String(chatId) }),
   getUsers: () => get({ action: 'users' }),
   getPosts: () => get({ action: 'posts' }),
-  sendMessage: (chatId: number, senderId: number, text: string) =>
-    get({ action: 'send_message', chat_id: String(chatId), sender_id: String(senderId), text }),
+  sendMessage: (chatId: number, senderId: number, text: string, imageUrl?: string) =>
+    get({ action: 'send_message', chat_id: String(chatId), sender_id: String(senderId), text, ...(imageUrl ? { image_url: imageUrl } : {}) }),
+  createPost: (userId: number, text: string, imageUrl?: string) =>
+    get({ action: 'create_post', user_id: String(userId), text, ...(imageUrl ? { image_url: imageUrl } : {}) }),
   createChat: (name: string, isGroup: boolean, createdBy: number, isPrivate: boolean = false) =>
     get({ action: 'create_chat', name, is_group: String(isGroup), created_by: String(createdBy), is_private: String(isPrivate) }),
   updateChatAvatar: (chatId: number, avatarUrl: string) =>
