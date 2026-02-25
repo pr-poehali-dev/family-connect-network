@@ -19,7 +19,7 @@ function AlphaLogo({ size = 'md' }: { size?: 'md' | 'lg' }) {
       <svg width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none" className="relative z-10">
         <path d="M12 3L4 21h3.5l1.5-3.5h6l1.5 3.5H20L12 3zm0 5.5L14.5 15h-5L12 8.5z" fill="white" />
       </svg>
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30" />
+      <div className="absolute bottom-0 left-0 right-0 h-[20%] bg-red-600" />
     </div>
   );
 }
