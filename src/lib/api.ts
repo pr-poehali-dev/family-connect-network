@@ -29,10 +29,20 @@ export const api = {
   getPosts: () => get({ action: 'posts' }),
   sendMessage: (chatId: number, senderId: number, text: string) =>
     get({ action: 'send_message', chat_id: String(chatId), sender_id: String(senderId), text }),
-  createChat: (name: string, isGroup: boolean, createdBy: number) =>
-    get({ action: 'create_chat', name, is_group: String(isGroup), created_by: String(createdBy) }),
+  createChat: (name: string, isGroup: boolean, createdBy: number, isPrivate: boolean = false) =>
+    get({ action: 'create_chat', name, is_group: String(isGroup), created_by: String(createdBy), is_private: String(isPrivate) }),
   updateChatAvatar: (chatId: number, avatarUrl: string) =>
     get({ action: 'update_chat_avatar', chat_id: String(chatId), avatar_url: avatarUrl }),
+  getMyChats: (userId: number) =>
+    get({ action: 'my_chats', user_id: String(userId) }),
+  getPublicChats: (userId: number) =>
+    get({ action: 'public_chats', user_id: String(userId) }),
+  getChatMembers: (chatId: number) =>
+    get({ action: 'get_chat_members', chat_id: String(chatId) }),
+  addChatMember: (chatId: number, userLogin: string, adminId: number) =>
+    get({ action: 'add_chat_member', chat_id: String(chatId), user_login: userLogin, admin_id: String(adminId) }),
+  joinChat: (chatId: number, userId: number) =>
+    get({ action: 'join_chat', chat_id: String(chatId), user_id: String(userId) }),
   updateProfile: (userId: number, name: string, bio: string, position: string) =>
     get({ action: 'update_profile', user_id: String(userId), name, bio, position }),
 };

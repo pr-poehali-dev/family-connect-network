@@ -25,6 +25,18 @@
       "method": "GET",
       "path": "/?action=posts",
       "expectedStatus": 200
+    },
+    {
+      "name": "Get my chats",
+      "method": "GET",
+      "path": "/?action=my_chats&user_id=1",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Get public chats",
+      "method": "GET",
+      "path": "/?action=public_chats&user_id=1",
+      "expectedStatus": 200
     }
   ]
 }

@@ -163,15 +163,15 @@ def send_message(chat_id, sender_id, text):
     conn.close()
     return msg
 
-def create_chat(name, is_group, created_by):
+def create_chat(name, is_group, created_by, is_private=False):
     """Создать новую беседу"""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(f"""
-        INSERT INTO {SCHEMA}.chats (name, is_group, created_by)
-        VALUES (%s, %s, %s)
-        RETURNING id, name, is_group, avatar_url, created_at
-    """, (name, is_group, created_by))
+        INSERT INTO {SCHEMA}.chats (name, is_group, created_by, is_private, admin_id)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING id, name, is_group, is_private, admin_id, avatar_url, created_at
+    """, (name, is_group, created_by, is_private, created_by))
     chat = dict(cur.fetchone())
     cur.execute(f"""
         INSERT INTO {SCHEMA}.chat_members (chat_id, user_id) VALUES (%s, %s)
@@ -180,6 +180,108 @@ def create_chat(name, is_group, created_by):
     cur.close()
     conn.close()
     return chat
+
+def get_chat_members(chat_id):
+    """Получить участников беседы"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        SELECT u.id, u.name, u.initials, u.avatar_url, u.login, u.position,
+               cm.joined_at
+        FROM {SCHEMA}.chat_members cm
+        JOIN {SCHEMA}.users u ON u.id = cm.user_id
+        WHERE cm.chat_id = %s
+        ORDER BY cm.joined_at ASC
+    """, (chat_id,))
+    members = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in members]
+
+def add_chat_member(chat_id, user_id, admin_id):
+    """Добавить участника в приватную беседу (только администратор)"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"SELECT admin_id, is_private FROM {SCHEMA}.chats WHERE id = %s", (chat_id,))
+    chat = cur.fetchone()
+    if not chat:
+        cur.close(); conn.close()
+        return None, 'Беседа не найдена'
+    if chat['is_private'] and chat['admin_id'] != admin_id:
+        cur.close(); conn.close()
+        return None, 'Только администратор беседы может добавлять участников'
+    cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE login = %s AND status = 'approved'", (user_id,))
+    user = cur.fetchone()
+    if not user:
+        cur.close(); conn.close()
+        return None, 'Пользователь с таким логином не найден'
+    cur.execute(f"SELECT 1 FROM {SCHEMA}.chat_members WHERE chat_id = %s AND user_id = %s", (chat_id, user['id']))
+    if cur.fetchone():
+        cur.close(); conn.close()
+        return None, 'Пользователь уже в беседе'
+    cur.execute(f"INSERT INTO {SCHEMA}.chat_members (chat_id, user_id) VALUES (%s, %s)", (chat_id, user['id']))
+    conn.commit()
+    cur.close(); conn.close()
+    return {'success': True, 'user_id': user['id']}, None
+
+def join_chat(chat_id, user_id):
+    """Вступить в открытую беседу"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"SELECT id, is_private FROM {SCHEMA}.chats WHERE id = %s", (chat_id,))
+    chat = cur.fetchone()
+    if not chat:
+        cur.close(); conn.close()
+        return None, 'Беседа не найдена'
+    if chat['is_private']:
+        cur.close(); conn.close()
+        return None, 'Это приватная беседа. Попросите администратора добавить вас'
+    cur.execute(f"SELECT 1 FROM {SCHEMA}.chat_members WHERE chat_id = %s AND user_id = %s", (chat_id, user_id))
+    if cur.fetchone():
+        cur.close(); conn.close()
+        return None, 'Вы уже в этой беседе'
+    cur.execute(f"INSERT INTO {SCHEMA}.chat_members (chat_id, user_id) VALUES (%s, %s)", (chat_id, user_id))
+    conn.commit()
+    cur.close(); conn.close()
+    return {'success': True}, None
+
+def get_my_chats(user_id):
+    """Получить беседы пользователя"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        SELECT c.id, c.name, c.is_group, c.is_private, c.admin_id, c.avatar_url,
+            COALESCE(
+                (SELECT m.text FROM {SCHEMA}.messages m
+                 WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1), ''
+            ) as last_message,
+            0 as unread
+        FROM {SCHEMA}.chats c
+        JOIN {SCHEMA}.chat_members cm ON cm.chat_id = c.id
+        WHERE cm.user_id = %s
+        ORDER BY c.updated_at DESC
+    """, (user_id,))
+    chats = cur.fetchall()
+    cur.close(); conn.close()
+    return [dict(r) for r in chats]
+
+def get_public_chats(user_id):
+    """Получить открытые беседы в которых пользователь не состоит"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        SELECT c.id, c.name, c.is_group, c.is_private, c.admin_id, c.avatar_url,
+            (SELECT COUNT(*) FROM {SCHEMA}.chat_members cm2 WHERE cm2.chat_id = c.id) as members_count
+        FROM {SCHEMA}.chats c
+        WHERE c.is_private = false
+          AND c.id NOT IN (
+              SELECT chat_id FROM {SCHEMA}.chat_members WHERE user_id = %s
+          )
+        ORDER BY c.created_at DESC
+    """, (user_id,))
+    chats = cur.fetchall()
+    cur.close(); conn.close()
+    return [dict(r) for r in chats]
 
 def update_chat_avatar(chat_id, avatar_url):
     """Обновить аватар беседы"""
@@ -324,12 +426,52 @@ def handler(event, context):
     elif action == 'create_chat':
         name = p.get('name', '')
         is_group = p.get('is_group', 'true')
+        is_private = p.get('is_private', 'false')
         if isinstance(is_group, str):
             is_group = is_group.lower() == 'true'
+        if isinstance(is_private, str):
+            is_private = is_private.lower() == 'true'
         created_by = p.get('created_by', 1)
         if not name:
             return response(400, {'error': 'name required'})
-        return response(200, create_chat(name, is_group, int(created_by)))
+        return response(200, create_chat(name, is_group, int(created_by), is_private))
+
+    elif action == 'get_chat_members':
+        chat_id = p.get('chat_id')
+        if not chat_id:
+            return response(400, {'error': 'chat_id required'})
+        return response(200, get_chat_members(int(chat_id)))
+
+    elif action == 'add_chat_member':
+        chat_id = p.get('chat_id')
+        user_login = p.get('user_login', '').strip()
+        admin_id = p.get('admin_id')
+        if not all([chat_id, user_login, admin_id]):
+            return response(400, {'error': 'chat_id, user_login, admin_id required'})
+        result, err = add_chat_member(int(chat_id), user_login, int(admin_id))
+        if err:
+            return response(400, {'error': err})
+        return response(200, result)
+
+    elif action == 'join_chat':
+        chat_id = p.get('chat_id')
+        user_id = p.get('user_id')
+        if not all([chat_id, user_id]):
+            return response(400, {'error': 'chat_id, user_id required'})
+        result, err = join_chat(int(chat_id), int(user_id))
+        if err:
+            return response(400, {'error': err})
+        return response(200, result)
+
+    elif action == 'my_chats':
+        user_id = p.get('user_id')
+        if not user_id:
+            return response(400, {'error': 'user_id required'})
+        return response(200, get_my_chats(int(user_id)))
+
+    elif action == 'public_chats':
+        user_id = p.get('user_id', 0)
+        return response(200, get_public_chats(int(user_id)))
 
     elif action == 'update_chat_avatar':
         chat_id = p.get('chat_id')
