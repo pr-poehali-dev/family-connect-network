@@ -254,6 +254,12 @@ export default function Index() {
     } catch (e) { console.error(e); return null; }
   }, [currentUser?.id]);
 
+  const handleDeletePost = useCallback(async (postId: number) => {
+    if (!currentUser) return;
+    await api.deletePost(postId, currentUser.id);
+    setPosts(prev => prev.filter(p => p.id !== postId));
+  }, [currentUser?.id]);
+
   const handleChangeChatAvatar = useCallback(async (chatId: number, avatarUrl: string) => {
     try {
       await api.updateChatAvatar(chatId, avatarUrl);
@@ -366,9 +372,11 @@ export default function Index() {
             posts={posts}
             users={usersForComponents}
             currentUserId={currentUser?.id}
+            currentUserRole={currentUser?.role}
             onCreatePost={handleCreatePost}
             onToggleLike={handleToggleLike}
             onAddComment={handleAddComment}
+            onDeletePost={handleDeletePost}
           />
 
           <ChatsTab

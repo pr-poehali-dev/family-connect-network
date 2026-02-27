@@ -186,6 +186,28 @@ def send_message(chat_id, sender_id, text, images=None):
     conn.close()
     return msg
 
+def delete_post(post_id, user_id):
+    """Удалить пост — только автор или администратор"""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"SELECT user_id FROM {SCHEMA}.posts WHERE id = %s", (post_id,))
+    post = cur.fetchone()
+    if not post:
+        cur.close(); conn.close()
+        return None, 'Пост не найден'
+    cur.execute(f"SELECT role FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+    user = cur.fetchone()
+    if not user:
+        cur.close(); conn.close()
+        return None, 'Пользователь не найден'
+    if post['user_id'] != user_id and user['role'] != 'admin':
+        cur.close(); conn.close()
+        return None, 'Нет прав для удаления этого поста'
+    cur.execute(f"DELETE FROM {SCHEMA}.posts WHERE id = %s", (post_id,))
+    conn.commit()
+    cur.close(); conn.close()
+    return {'deleted': post_id}, None
+
 def create_post(user_id, text, images=None):
     """Создать публикацию (images — список dataURL/URL)"""
     conn = get_conn()
@@ -652,6 +674,16 @@ def handler(event, context):
         if not all([post_id, user_id, text]):
             return response(400, {'error': 'post_id, user_id, text required'})
         return response(200, add_comment(int(post_id), int(user_id), text))
+
+    elif action == 'delete_post':
+        post_id = p.get('post_id')
+        user_id = p.get('user_id')
+        if not all([post_id, user_id]):
+            return response(400, {'error': 'post_id, user_id required'})
+        result, err = delete_post(int(post_id), int(user_id))
+        if err:
+            return response(403, {'error': err})
+        return response(200, result)
 
     else:
         return response(200, {'status': 'ok'})

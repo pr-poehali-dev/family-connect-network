@@ -44,9 +44,11 @@ type HomeTabProps = {
   posts: Post[];
   users: User[];
   currentUserId?: number;
+  currentUserRole?: 'admin' | 'user';
   onCreatePost?: (text: string, images?: string[]) => Promise<void>;
   onToggleLike?: (postId: number) => void;
   onAddComment?: (postId: number, text: string) => Promise<Comment | null>;
+  onDeletePost?: (postId: number) => Promise<void>;
 };
 
 function MediaGrid({ images }: { images: string[] }) {
@@ -72,12 +74,14 @@ function MediaGrid({ images }: { images: string[] }) {
   );
 }
 
-function PostCard({ post, users, currentUserId, onToggleLike, onAddComment }: {
+function PostCard({ post, users, currentUserId, currentUserRole, onToggleLike, onAddComment, onDeletePost }: {
   post: Post;
   users: User[];
   currentUserId?: number;
+  currentUserRole?: 'admin' | 'user';
   onToggleLike?: (postId: number) => void;
   onAddComment?: (postId: number, text: string) => Promise<Comment | null>;
+  onDeletePost?: (postId: number) => Promise<void>;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -86,9 +90,11 @@ function PostCard({ post, users, currentUserId, onToggleLike, onAddComment }: {
   const [sendingComment, setSendingComment] = useState(false);
   const [liked, setLiked] = useState(post.likedByMe || false);
   const [likesCount, setLikesCount] = useState(post.likes);
+  const [deleting, setDeleting] = useState(false);
 
   const author = users.find(u => u.id === post.userId);
   const mediaList = post.images && post.images.length > 0 ? post.images : post.image ? [post.image] : [];
+  const canDelete = currentUserId && (currentUserId === post.userId || currentUserRole === 'admin');
 
   const handleToggleComments = async () => {
     if (!showComments && !commentsLoaded) {
@@ -106,6 +112,17 @@ function PostCard({ post, users, currentUserId, onToggleLike, onAddComment }: {
     setLiked(prev => !prev);
     setLikesCount(prev => liked ? prev - 1 : prev + 1);
     onToggleLike?.(post.id);
+  };
+
+  const handleDelete = async () => {
+    if (!currentUserId || !onDeletePost) return;
+    if (!window.confirm('Удалить этот пост?')) return;
+    setDeleting(true);
+    try {
+      await onDeletePost(post.id);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSendComment = async () => {
@@ -129,10 +146,21 @@ function PostCard({ post, users, currentUserId, onToggleLike, onAddComment }: {
           <Avatar className="w-12 h-12 border-2 border-primary">
             <AvatarFallback className="bg-secondary font-medium">{author?.initials}</AvatarFallback>
           </Avatar>
-          <div>
+          <div className="flex-1">
             <p className="font-semibold">{author?.name}</p>
             <p className="text-xs text-muted-foreground">{post.timestamp}</p>
           </div>
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              <Icon name="Trash2" size={16} />
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -205,7 +233,7 @@ function PostCard({ post, users, currentUserId, onToggleLike, onAddComment }: {
   );
 }
 
-export default function HomeTab({ posts, users, currentUserId, onCreatePost, onToggleLike, onAddComment }: HomeTabProps) {
+export default function HomeTab({ posts, users, currentUserId, currentUserRole, onCreatePost, onToggleLike, onAddComment, onDeletePost }: HomeTabProps) {
   const [postText, setPostText] = useState('');
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
@@ -328,8 +356,10 @@ export default function HomeTab({ posts, users, currentUserId, onCreatePost, onT
             post={post}
             users={users}
             currentUserId={currentUserId}
+            currentUserRole={currentUserRole}
             onToggleLike={onToggleLike}
             onAddComment={onAddComment}
+            onDeletePost={onDeletePost}
           />
         ))}
       </div>

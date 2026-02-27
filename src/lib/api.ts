@@ -53,6 +53,8 @@ export const api = {
     get({ action: 'get_comments', post_id: String(postId) }),
   addComment: (postId: number, userId: number, text: string) =>
     get({ action: 'add_comment', post_id: String(postId), user_id: String(userId), text }),
+  deletePost: (postId: number, userId: number) =>
+    get({ action: 'delete_post', post_id: String(postId), user_id: String(userId) }),
 };
 
 export default api;
