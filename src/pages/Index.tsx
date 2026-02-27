@@ -233,6 +233,12 @@ export default function Index() {
 
   const handleRoleChanged = (userId: number, role: 'admin' | 'user') => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
+    if (currentUser && userId === currentUser.id) {
+      const updated = { ...currentUser, role };
+      setCurrentUser(updated);
+      setAuthedUser(updated);
+      localStorage.setItem('alfa_user', JSON.stringify(updated));
+    }
   };
 
   if (!authedUser) {
