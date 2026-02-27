@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -205,12 +205,57 @@ export default function Index() {
     load();
   }, [authedUser?.id]);
 
+  const selectedChatRef = useRef(selectedChat);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
   useEffect(() => {
     if (!selectedChat || !currentUser) return;
     api.getMessages(selectedChat.id, currentUser.id).then((dbMsgs: DbMessage[]) => {
       setMessages(dbMsgs.map(mapMessage));
     }).catch(console.error);
   }, [selectedChat?.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const POSTS_INTERVAL = 15000;
+    const MSGS_INTERVAL = 5000;
+    const CHATS_INTERVAL = 15000;
+
+    const postTimer = setInterval(async () => {
+      try {
+        const dbPosts = await api.getPosts();
+        setPosts(dbPosts.map(mapPost));
+      } catch { /* silent */ }
+    }, POSTS_INTERVAL);
+
+    const msgsTimer = setInterval(async () => {
+      const chat = selectedChatRef.current;
+      const user = currentUserRef.current;
+      if (!chat || !user) return;
+      try {
+        const dbMsgs = await api.getMessages(chat.id, user.id);
+        if (dbMsgs) setMessages(dbMsgs.map(mapMessage));
+      } catch { /* silent */ }
+    }, MSGS_INTERVAL);
+
+    const chatsTimer = setInterval(async () => {
+      const user = currentUserRef.current;
+      if (!user) return;
+      try {
+        const dbChats = await api.getChats(user.id);
+        setChats(dbChats.map(mapChat));
+      } catch { /* silent */ }
+    }, CHATS_INTERVAL);
+
+    return () => {
+      clearInterval(postTimer);
+      clearInterval(msgsTimer);
+      clearInterval(chatsTimer);
+    };
+  }, [currentUser?.id]);
 
   const handleCreateChat = useCallback(async (chatName: string, isGroup: boolean, isPrivate: boolean = false) => {
     if (!currentUser) return;
