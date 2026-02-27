@@ -1,131 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import Icon from '@/components/ui/icon';
+import { Tabs } from '@/components/ui/tabs';
 import HomeTab from '@/components/HomeTab';
 import ChatsTab from '@/components/ChatsTab';
 import ProfileTab from '@/components/ProfileTab';
 import AdminTab from '@/components/AdminTab';
 import AuthPage from '@/components/AuthPage';
 import PendingScreen from '@/components/PendingScreen';
+import AppNav from '@/components/AppNav';
+import AppTabs from '@/components/AppTabs';
+import MessagesTab from '@/components/MessagesTab';
 import api from '@/lib/api';
-
-type User = {
-  id: number;
-  name: string;
-  avatar_url: string;
-  initials: string;
-  status: string;
-  role: 'admin' | 'user';
-  position?: string;
-  bio?: string;
-};
-
-type DbMessage = {
-  id: number;
-  chat_id: number;
-  sender_id: number;
-  text: string;
-  has_image: boolean;
-  image_url: string;
-  created_at: string;
-  sender_name: string;
-  sender_initials: string;
-};
-
-type Message = {
-  id: number;
-  senderId: number;
-  text: string;
-  timestamp: string;
-  hasImage?: boolean;
-  imageUrl?: string;
-  images?: string[];
-};
-
-type DbChat = {
-  id: number;
-  name: string;
-  is_group: boolean;
-  avatar_url: string;
-  last_message: string;
-  unread: number;
-};
-
-type Chat = {
-  id: number;
-  name: string;
-  avatar: string;
-  lastMessage: string;
-  unread: number;
-  isGroup: boolean;
-};
-
-type DbPost = {
-  id: number;
-  user_id: number;
-  text: string;
-  image_url: string;
-  likes_count: number;
-  comments_count: number;
-  created_at: string;
-  user_name: string;
-  user_initials: string;
-};
-
-type Post = {
-  id: number;
-  userId: number;
-  text: string;
-  image?: string;
-  images?: string[];
-  timestamp: string;
-  likes: number;
-  comments: number;
-  likedByMe?: boolean;
-};
-
-function formatTime(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-}
-
-function timeAgo(dateStr: string) {
-  const now = Date.now();
-  const d = new Date(dateStr).getTime();
-  const diff = Math.floor((now - d) / 60000);
-  if (diff < 1) return 'только что';
-  if (diff < 60) return `${diff} мин. назад`;
-  const hours = Math.floor(diff / 60);
-  if (hours < 24) return `${hours} ч. назад`;
-  const days = Math.floor(hours / 24);
-  return `${days} дн. назад`;
-}
-
-function mapChat(c: DbChat): Chat {
-  return { id: c.id, name: c.name, avatar: c.avatar_url || '', lastMessage: c.last_message || '', unread: c.unread, isGroup: c.is_group };
-}
-function mapMessage(m: DbMessage): Message {
-  const imgs: string[] = Array.isArray((m as Record<string, unknown>).images) ? (m as Record<string, unknown>).images as string[] : [];
-  return { id: m.id, senderId: m.sender_id, text: m.text, timestamp: formatTime(m.created_at), hasImage: m.has_image, imageUrl: m.image_url || undefined, images: imgs.length > 0 ? imgs : undefined };
-}
-function mapPost(p: DbPost): Post {
-  const imgs: string[] = Array.isArray((p as Record<string, unknown>).images) ? (p as Record<string, unknown>).images as string[] : [];
-  return { id: p.id, userId: p.user_id, text: p.text, image: p.image_url || undefined, images: imgs.length > 0 ? imgs : undefined, timestamp: timeAgo(p.created_at), likes: p.likes_count, comments: p.comments_count };
-}
-
-function AlphaLogo() {
-  return (
-    <div className="w-10 h-10 bg-white rounded-md grid place-items-center relative overflow-hidden">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="relative z-10">
-        <path d="M12 3L4 21h3.5l1.5-3.5h6l1.5 3.5H20L12 3zm0 5.5L14.5 15h-5L12 8.5z" fill="hsl(0, 89%, 40%)" />
-      </svg>
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary" />
-    </div>
-  );
-}
+import type { User, Chat, Message, Post, DbChat, DbMessage, DbPost } from '@/types/index';
+import { mapChat, mapMessage, mapPost, formatTime } from '@/types/index';
 
 export default function Index() {
   const [authedUser, setAuthedUser] = useState<User | null>(() => {
@@ -133,7 +19,6 @@ export default function Index() {
       const saved = localStorage.getItem('alfa_user');
       if (!saved) return null;
       const parsed = JSON.parse(saved);
-      // Если id=0 — это старый формат admin, сбрасываем (нужен реальный id из БД)
       if (!parsed.id || parsed.id === 0) {
         localStorage.removeItem('alfa_user');
         return null;
@@ -388,54 +273,16 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="sticky top-0 z-50 bg-primary shadow-md">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <AlphaLogo />
-              <h1 className="text-2xl font-bold text-white tracking-tight">{siteName}</h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Avatar className="w-9 h-9 border-2 border-white/40">
-                  <AvatarFallback className="bg-white/20 text-white text-sm font-medium">{currentUser.initials}</AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium text-white hidden sm:inline">{currentUser.name}</span>
-              </div>
-              <Button size="icon" variant="ghost" onClick={handleLogout} className="text-white/70 hover:text-white hover:bg-white/10 rounded-full">
-                <Icon name="LogOut" size={18} />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AppNav
+        siteName={siteName}
+        userName={currentUser.name}
+        userInitials={currentUser.initials}
+        onLogout={handleLogout}
+      />
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid bg-white p-1 rounded-lg border border-border shadow-sm">
-            <TabsTrigger value="home" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
-              <Icon name="Home" size={18} />
-              <span className="hidden sm:inline">Главная</span>
-            </TabsTrigger>
-            <TabsTrigger value="chats" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
-              <Icon name="MessageCircle" size={18} />
-              <span className="hidden sm:inline">Беседы</span>
-            </TabsTrigger>
-            <TabsTrigger value="messages" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
-              <Icon name="Send" size={18} />
-              <span className="hidden sm:inline">Сообщения</span>
-            </TabsTrigger>
-            <TabsTrigger value="profile" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
-              <Icon name="User" size={18} />
-              <span className="hidden sm:inline">Профиль</span>
-            </TabsTrigger>
-            {currentUser.role === 'admin' && (
-              <TabsTrigger value="admin" className="rounded-md gap-2 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">
-                <Icon name="Shield" size={18} />
-                <span className="hidden sm:inline">Админ</span>
-              </TabsTrigger>
-            )}
-          </TabsList>
+          <AppTabs isAdmin={currentUser.role === 'admin'} />
 
           <HomeTab
             posts={posts}
@@ -460,38 +307,7 @@ export default function Index() {
             onChangeChatAvatar={handleChangeChatAvatar}
           />
 
-          <TabsContent value="messages" className="animate-fade-in">
-            <Card className="border rounded-lg overflow-hidden">
-              <CardHeader className="bg-primary text-white">
-                <CardTitle>Личные сообщения</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                {chats.filter(c => !c.isGroup).length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Icon name="MessageCircle" size={40} className="mx-auto mb-3 text-primary/30" />
-                    <p>Нет личных сообщений</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {chats.filter(c => !c.isGroup).map((chat) => (
-                      <button key={chat.id} onClick={() => handleOpenChat(chat)} className="w-full p-4 rounded-lg bg-muted hover:bg-primary/5 transition-colors text-left">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-12 h-12 border-2 border-primary/20">
-                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">{chat.name[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <p className="font-semibold">{chat.name}</p>
-                            <p className="text-sm text-muted-foreground">{chat.lastMessage}</p>
-                          </div>
-                          <Icon name="ChevronRight" size={20} className="text-muted-foreground" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <MessagesTab chats={chats} onOpenChat={handleOpenChat} />
 
           <ProfileTab
             currentUser={currentUserForComponents}
