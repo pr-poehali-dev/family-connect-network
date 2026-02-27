@@ -44,7 +44,7 @@ type HomeTabProps = {
   posts: Post[];
   users: User[];
   currentUserId?: number;
-  onCreatePost?: (text: string, images?: string[]) => void;
+  onCreatePost?: (text: string, images?: string[]) => Promise<void>;
   onToggleLike?: (postId: number) => void;
   onAddComment?: (postId: number, text: string) => Promise<Comment | null>;
 };
@@ -208,6 +208,8 @@ function PostCard({ post, users, currentUserId, onToggleLike, onAddComment }: {
 export default function HomeTab({ posts, users, currentUserId, onCreatePost, onToggleLike, onAddComment }: HomeTabProps) {
   const [postText, setPostText] = useState('');
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -240,11 +242,23 @@ export default function HomeTab({ posts, users, currentUserId, onCreatePost, onT
     }
   }, []);
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!postText.trim() && pendingImages.length === 0) return;
-    onCreatePost?.(postText, pendingImages.length > 0 ? pendingImages : undefined);
-    setPostText('');
-    setPendingImages([]);
+    if (!currentUserId) {
+      setPublishError('Необходимо войти в аккаунт');
+      return;
+    }
+    setPublishing(true);
+    setPublishError('');
+    try {
+      await onCreatePost?.(postText, pendingImages.length > 0 ? pendingImages : undefined);
+      setPostText('');
+      setPendingImages([]);
+    } catch {
+      setPublishError('Ошибка при публикации. Попробуйте ещё раз.');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
@@ -286,6 +300,7 @@ export default function HomeTab({ posts, users, currentUserId, onCreatePost, onT
               ))}
             </div>
           )}
+          {publishError && <p className="text-sm text-red-500">{publishError}</p>}
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" className="rounded-full gap-2 hover:scale-105 transition-transform duration-200" onClick={() => photoInputRef.current?.click()}>
               <Icon name="Image" size={16} />
@@ -298,9 +313,9 @@ export default function HomeTab({ posts, users, currentUserId, onCreatePost, onT
             <Button
               className="ml-auto rounded-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
               onClick={handlePublish}
-              disabled={!postText.trim() && pendingImages.length === 0}
+              disabled={publishing || (!postText.trim() && pendingImages.length === 0)}
             >
-              Опубликовать
+              {publishing ? 'Публикую...' : 'Опубликовать'}
             </Button>
           </div>
         </CardContent>

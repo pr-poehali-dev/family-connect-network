@@ -232,11 +232,9 @@ export default function Index() {
   }, [selectedChat, currentUser?.id]);
 
   const handleCreatePost = useCallback(async (text: string, images?: string[]) => {
-    if (!currentUser) return;
-    try {
-      const dbPost = await api.createPost(currentUser.id, text, images);
-      setPosts(prev => [mapPost(dbPost), ...prev]);
-    } catch (e) { console.error(e); }
+    if (!currentUser || !currentUser.id) throw new Error('Не авторизован');
+    const dbPost = await api.createPost(currentUser.id, text, images);
+    setPosts(prev => [mapPost(dbPost), ...prev]);
   }, [currentUser?.id]);
 
   const handleToggleLike = useCallback(async (postId: number) => {
