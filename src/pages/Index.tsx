@@ -221,13 +221,20 @@ export default function Index() {
   useEffect(() => {
     if (!currentUser) return;
     const POSTS_INTERVAL = 15000;
-    const MSGS_INTERVAL = 5000;
+    const MSGS_INTERVAL = 3000;
     const CHATS_INTERVAL = 15000;
 
     const postTimer = setInterval(async () => {
       try {
         const dbPosts = await api.getPosts();
-        setPosts(dbPosts.map(mapPost));
+        const fresh = dbPosts.map(mapPost);
+        setPosts(prev => {
+          const prevIds = new Set(prev.map((p: Post) => p.id));
+          const newOnes = fresh.filter((p: Post) => !prevIds.has(p.id));
+          const deletedIds = new Set(fresh.map((p: Post) => p.id));
+          const kept = prev.filter((p: Post) => deletedIds.has(p.id));
+          return newOnes.length > 0 ? [...newOnes, ...kept] : kept;
+        });
       } catch { /* silent */ }
     }, POSTS_INTERVAL);
 
@@ -237,7 +244,13 @@ export default function Index() {
       if (!chat || !user) return;
       try {
         const dbMsgs = await api.getMessages(chat.id, user.id);
-        if (dbMsgs) setMessages(dbMsgs.map(mapMessage));
+        if (!dbMsgs) return;
+        const fresh = dbMsgs.map(mapMessage);
+        setMessages(prev => {
+          const prevIds = new Set(prev.map((m: Message) => m.id));
+          const newOnes = fresh.filter((m: Message) => !prevIds.has(m.id));
+          return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+        });
       } catch { /* silent */ }
     }, MSGS_INTERVAL);
 
@@ -246,7 +259,14 @@ export default function Index() {
       if (!user) return;
       try {
         const dbChats = await api.getChats(user.id);
-        setChats(dbChats.map(mapChat));
+        const fresh = dbChats.map(mapChat);
+        setChats(prev => {
+          const hasChanges = fresh.some((fc: Chat) => {
+            const old = prev.find((c: Chat) => c.id === fc.id);
+            return !old || old.lastMessage !== fc.lastMessage || old.unread !== fc.unread;
+          }) || fresh.length !== prev.length;
+          return hasChanges ? fresh : prev;
+        });
       } catch { /* silent */ }
     }, CHATS_INTERVAL);
 
