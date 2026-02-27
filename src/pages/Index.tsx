@@ -346,6 +346,10 @@ export default function Index() {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'rejected' } : u));
   };
 
+  const handleRoleChanged = (userId: number, role: 'admin' | 'user') => {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
+  };
+
   if (!authedUser) {
     return <AuthPage onAuth={handleAuth} />;
   }
@@ -506,6 +510,8 @@ export default function Index() {
               approvedUsers={approvedUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar_url, initials: u.initials, status: u.status as 'approved' | 'pending', role: u.role }))}
               onUserApproved={handleUserApproved}
               onUserRejected={handleUserRejected}
+              onRoleChanged={handleRoleChanged}
+              currentUserId={currentUser.id}
             />
           )}
         </Tabs>

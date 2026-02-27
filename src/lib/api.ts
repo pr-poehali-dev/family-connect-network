@@ -55,6 +55,8 @@ export const api = {
     get({ action: 'add_comment', post_id: String(postId), user_id: String(userId), text }),
   deletePost: (postId: number, userId: number) =>
     get({ action: 'delete_post', post_id: String(postId), user_id: String(userId) }),
+  setUserRole: (userId: number, role: 'admin' | 'user') =>
+    get({ action: 'set_role', user_id: String(userId), role }),
 };
 
 export default api;

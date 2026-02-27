@@ -26,10 +26,13 @@ type AdminTabProps = {
   approvedUsers: User[];
   onUserApproved?: (userId: number) => void;
   onUserRejected?: (userId: number) => void;
+  onRoleChanged?: (userId: number, role: 'admin' | 'user') => void;
+  currentUserId?: number;
 };
 
-export default function AdminTab({ siteName, setSiteName, pendingUsers, approvedUsers, onUserApproved, onUserRejected }: AdminTabProps) {
+export default function AdminTab({ siteName, setSiteName, pendingUsers, approvedUsers, onUserApproved, onUserRejected, onRoleChanged, currentUserId }: AdminTabProps) {
   const [processing, setProcessing] = useState<number | null>(null);
+  const [roleProcessing, setRoleProcessing] = useState<number | null>(null);
 
   const handleApprove = async (userId: number) => {
     setProcessing(userId);
@@ -52,6 +55,19 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
       console.error(e);
     } finally {
       setProcessing(null);
+    }
+  };
+
+  const handleToggleRole = async (user: User) => {
+    const newRole = user.role === 'admin' ? 'user' : 'admin';
+    setRoleProcessing(user.id);
+    try {
+      await api.setUserRole(user.id, newRole);
+      onRoleChanged?.(user.id, newRole);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRoleProcessing(null);
     }
   };
 
@@ -145,11 +161,23 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
                     </Avatar>
                     <div>
                       <p className="font-semibold">{user.name}</p>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant={user.role === 'admin' ? 'default' : 'outline'} className="text-xs">
                         {user.role === 'admin' ? 'Администратор' : 'Участник'}
                       </Badge>
                     </div>
                   </div>
+                  {user.id !== currentUserId && (
+                    <Button
+                      size="sm"
+                      variant={user.role === 'admin' ? 'outline' : 'default'}
+                      onClick={() => handleToggleRole(user)}
+                      disabled={roleProcessing === user.id}
+                      className="rounded-md text-xs"
+                    >
+                      <Icon name={user.role === 'admin' ? 'ShieldOff' : 'ShieldCheck'} size={14} className="mr-1" />
+                      {user.role === 'admin' ? 'Снять права' : 'Сделать админом'}
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>

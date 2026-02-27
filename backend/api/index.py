@@ -106,6 +106,22 @@ def update_user_status(user_id, status):
     cur.close(); conn.close()
     return dict(user) if user else None
 
+def set_user_role(user_id, role):
+    """Установить роль пользователя (admin/user)"""
+    if role not in ('admin', 'user'):
+        return None, 'Недопустимая роль'
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"""
+        UPDATE {SCHEMA}.users SET role = %s, updated_at = NOW()
+        WHERE id = %s
+        RETURNING id, name, initials, status, role
+    """, (role, user_id))
+    user = cur.fetchone()
+    conn.commit()
+    cur.close(); conn.close()
+    return dict(user) if user else None, None if user else 'Пользователь не найден'
+
 def update_user_profile(user_id, name, bio=None, position=None):
     """Обновить профиль пользователя"""
     conn = get_conn()
@@ -470,6 +486,16 @@ def handler(event, context):
             return response(400, {'error': 'user_id required'})
         result = update_user_status(int(user_id), 'rejected')
         return response(200, result) if result else response(404, {'error': 'user not found'})
+
+    elif action == 'set_role':
+        user_id = p.get('user_id')
+        role = p.get('role', '')
+        if not user_id or not role:
+            return response(400, {'error': 'user_id и role required'})
+        result, err = set_user_role(int(user_id), role)
+        if err:
+            return response(400, {'error': err})
+        return response(200, result)
 
     elif action == 'update_profile':
         user_id = p.get('user_id')
