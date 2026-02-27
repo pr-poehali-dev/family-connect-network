@@ -555,11 +555,11 @@ def handler(event, context):
 
     elif action == 'create_post':
         user_id = p.get('user_id')
-        text = p.get('text', '')
+        text = p.get('text', '') or ''
         images_raw = p.get('images', [])
         if isinstance(images_raw, str):
             images_raw = json.loads(images_raw) if images_raw else []
-        if not user_id or (not text and not images_raw):
+        if not user_id or (not text.strip() and not images_raw):
             return response(400, {'error': 'user_id и text или images required'})
         return response(200, create_post(int(user_id), text, images_raw))
 

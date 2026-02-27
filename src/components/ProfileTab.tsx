@@ -17,6 +17,8 @@ type User = {
   initials: string;
   status: 'approved' | 'pending';
   role: 'admin' | 'user';
+  position?: string;
+  bio?: string;
 };
 
 type MyChat = {
@@ -45,13 +47,13 @@ type ChatMember = {
 
 type ProfileTabProps = {
   currentUser: User;
-  onProfileUpdate?: (name: string, initials: string) => void;
+  onProfileUpdate?: (name: string, initials: string, position: string, bio: string) => void;
 };
 
 export default function ProfileTab({ currentUser, onProfileUpdate }: ProfileTabProps) {
   const [name, setName] = useState(currentUser.name);
-  const [position, setPosition] = useState('');
-  const [bio, setBio] = useState('');
+  const [position, setPosition] = useState(currentUser.position || '');
+  const [bio, setBio] = useState(currentUser.bio || '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -74,7 +76,9 @@ export default function ProfileTab({ currentUser, onProfileUpdate }: ProfileTabP
 
   useEffect(() => {
     setName(currentUser.name);
-  }, [currentUser.name]);
+    setPosition(currentUser.position || '');
+    setBio(currentUser.bio || '');
+  }, [currentUser.id, currentUser.name, currentUser.position, currentUser.bio]);
 
   useEffect(() => {
     loadChats();
@@ -103,7 +107,7 @@ export default function ProfileTab({ currentUser, onProfileUpdate }: ProfileTabP
       const result = await api.updateProfile(currentUser.id, name, bio, position);
       if (result) {
         if (onProfileUpdate) {
-          onProfileUpdate(result.name, result.initials);
+          onProfileUpdate(result.name, result.initials, result.position || '', result.bio || '');
         }
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
@@ -201,11 +205,14 @@ export default function ProfileTab({ currentUser, onProfileUpdate }: ProfileTabP
               <AvatarFallback className="bg-primary/10 text-primary text-4xl font-bold">{currentUser.initials}</AvatarFallback>
             </Avatar>
             <div className="text-center">
+              {currentUser.role === 'admin' && (
+                <Badge className="bg-red-600 text-white mb-2">Администратор</Badge>
+              )}
               <h2 className="text-2xl font-bold mb-1">{currentUser.name}</h2>
               {position && <p className="text-muted-foreground mb-2">{position}</p>}
-              <Badge className="bg-primary text-white">
-                {currentUser.role === 'admin' ? 'Администратор' : 'Участник'}
-              </Badge>
+              {currentUser.role !== 'admin' && (
+                <Badge className="bg-primary text-white">Участник</Badge>
+              )}
             </div>
           </div>
 

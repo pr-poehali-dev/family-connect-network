@@ -46,7 +46,7 @@ type ChatsTabProps = {
   currentUser: User;
   selectedChat: Chat | null;
   setSelectedChat: (chat: Chat | null) => void;
-  onCreateChat: (chatName: string, isGroup: boolean) => void;
+  onCreateChat: (chatName: string, isGroup: boolean, isPrivate: boolean) => void;
   onSendMessage: (text: string, images?: string[]) => void;
   onChangeChatAvatar: (chatId: number, avatarUrl: string) => void;
 };
@@ -54,6 +54,7 @@ type ChatsTabProps = {
 export default function ChatsTab({ chats, messages, users, currentUser, selectedChat, setSelectedChat, onCreateChat, onSendMessage, onChangeChatAvatar }: ChatsTabProps) {
   const [newChatName, setNewChatName] = useState('');
   const [isGroupChat, setIsGroupChat] = useState(true);
+  const [isPrivateChat, setIsPrivateChat] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -63,8 +64,10 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
 
   const handleCreateChat = () => {
     if (newChatName.trim()) {
-      onCreateChat(newChatName, isGroupChat);
+      onCreateChat(newChatName, isGroupChat, isPrivateChat);
       setNewChatName('');
+      setIsGroupChat(true);
+      setIsPrivateChat(false);
       setIsDialogOpen(false);
     }
   };
@@ -179,9 +182,10 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                       <Label htmlFor="isGroup">Групповая беседа</Label>
                       <Switch id="isGroup" checked={isGroupChat} onCheckedChange={setIsGroupChat} />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {isGroupChat ? 'Групповая — все участники видят беседу' : 'Приватная — только вы и собеседник'}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="isPrivate">Приватная (только по приглашению)</Label>
+                      <Switch id="isPrivate" checked={isPrivateChat} onCheckedChange={setIsPrivateChat} />
+                    </div>
                     <Button onClick={handleCreateChat} className="w-full rounded-md bg-primary text-white hover:bg-primary/90">
                       Создать
                     </Button>

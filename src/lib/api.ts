@@ -30,7 +30,7 @@ export const api = {
   sendMessage: (chatId: number, senderId: number, text: string, images?: string[]) =>
     get({ action: 'send_message', chat_id: String(chatId), sender_id: String(senderId), text, ...(images && images.length > 0 ? { images: JSON.stringify(images) } : {}) }),
   createPost: (userId: number, text: string, images?: string[]) =>
-    get({ action: 'create_post', user_id: String(userId), text, ...(images && images.length > 0 ? { images: JSON.stringify(images) } : {}) }),
+    get({ action: 'create_post', user_id: String(userId), text: text || (images && images.length > 0 ? ' ' : ''), ...(images && images.length > 0 ? { images: JSON.stringify(images) } : {}) }),
   createChat: (name: string, isGroup: boolean, createdBy: number, isPrivate: boolean = false) =>
     get({ action: 'create_chat', name, is_group: String(isGroup), created_by: String(createdBy), is_private: String(isPrivate) }),
   updateChatAvatar: (chatId: number, avatarUrl: string) =>

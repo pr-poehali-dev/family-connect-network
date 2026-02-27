@@ -19,6 +19,8 @@ type User = {
   initials: string;
   status: string;
   role: 'admin' | 'user';
+  position?: string;
+  bio?: string;
 };
 
 type DbMessage = {
@@ -172,6 +174,8 @@ export default function Index() {
           initials: u.initials as string,
           status: u.status as string,
           role: u.role as 'admin' | 'user',
+          position: (u.position as string) || '',
+          bio: (u.bio as string) || '',
         }));
         setUsers(mappedUsers);
         setChats(dbChats.map(mapChat));
@@ -201,10 +205,10 @@ export default function Index() {
     }).catch(console.error);
   }, [selectedChat?.id]);
 
-  const handleCreateChat = useCallback(async (chatName: string, isGroup: boolean) => {
+  const handleCreateChat = useCallback(async (chatName: string, isGroup: boolean, isPrivate: boolean = false) => {
     if (!currentUser) return;
     try {
-      const dbChat = await api.createChat(chatName, isGroup, currentUser.id);
+      const dbChat = await api.createChat(chatName, isGroup, currentUser.id, isPrivate);
       const newChat: Chat = { id: dbChat.id, name: dbChat.name, avatar: dbChat.avatar_url || '', lastMessage: '', unread: 0, isGroup: dbChat.is_group };
       setChats(prev => [...prev, newChat]);
     } catch (e) { console.error(e); }
@@ -299,7 +303,7 @@ export default function Index() {
     id: u.id, name: u.name, avatar: u.avatar_url, initials: u.initials, status: u.status as 'approved' | 'pending', role: u.role
   }));
   const currentUserForComponents = {
-    id: currentUser.id, name: currentUser.name, avatar: currentUser.avatar_url, initials: currentUser.initials, status: currentUser.status as 'approved' | 'pending', role: currentUser.role
+    id: currentUser.id, name: currentUser.name, avatar: currentUser.avatar_url, initials: currentUser.initials, status: currentUser.status as 'approved' | 'pending', role: currentUser.role, position: currentUser.position || '', bio: currentUser.bio || ''
   };
 
   return (
@@ -409,9 +413,10 @@ export default function Index() {
 
           <ProfileTab
             currentUser={currentUserForComponents}
-            onProfileUpdate={(name, initials) => {
-              setCurrentUser(prev => prev ? { ...prev, name, initials } : prev);
-              setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, name, initials } : u));
+            onProfileUpdate={(name, initials, position, bio) => {
+              setCurrentUser(prev => prev ? { ...prev, name, initials, position, bio } : prev);
+              setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, name, initials, position, bio } : u));
+              localStorage.setItem('alfa_user', JSON.stringify({ ...authedUser, name, initials, position, bio }));
             }}
           />
 
