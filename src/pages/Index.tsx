@@ -131,7 +131,14 @@ export default function Index() {
   const [authedUser, setAuthedUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('alfa_user');
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      // Если id=0 — это старый формат admin, сбрасываем (нужен реальный id из БД)
+      if (!parsed.id || parsed.id === 0) {
+        localStorage.removeItem('alfa_user');
+        return null;
+      }
+      return parsed;
     } catch { return null; }
   });
 
