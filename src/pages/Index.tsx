@@ -108,6 +108,7 @@ export default function Index() {
     const POSTS_INTERVAL = 15000;
     const MSGS_INTERVAL = 3000;
     const CHATS_INTERVAL = 15000;
+    const USERS_INTERVAL = 15000;
 
     const postTimer = setInterval(async () => {
       try {
@@ -155,10 +156,48 @@ export default function Index() {
       } catch { /* silent */ }
     }, CHATS_INTERVAL);
 
+    const usersTimer = setInterval(async () => {
+      const user = currentUserRef.current;
+      if (!user) return;
+      try {
+        const dbUsers = await api.getUsers();
+        const fresh: User[] = dbUsers.map((u: Record<string, unknown>) => ({
+          id: u.id as number,
+          name: u.name as string,
+          avatar_url: (u.avatar_url as string) || '',
+          initials: u.initials as string,
+          status: u.status as string,
+          role: u.role as 'admin' | 'user',
+          position: (u.position as string) || '',
+          bio: (u.bio as string) || '',
+        }));
+        setUsers(prev => {
+          const hasChanges = fresh.length !== prev.length || fresh.some(fu => {
+            const old = prev.find(u => u.id === fu.id);
+            return !old || old.role !== fu.role || old.status !== fu.status || old.name !== fu.name || old.position !== fu.position || old.bio !== fu.bio;
+          });
+          return hasChanges ? fresh : prev;
+        });
+        const freshMe = fresh.find(u => u.id === user.id);
+        if (freshMe) {
+          setCurrentUser(prev => {
+            if (!prev) return prev;
+            const changed = prev.role !== freshMe.role || prev.status !== freshMe.status || prev.name !== freshMe.name || prev.position !== freshMe.position || prev.bio !== freshMe.bio;
+            if (!changed) return prev;
+            const updated = { ...prev, ...freshMe };
+            setAuthedUser(updated);
+            localStorage.setItem('alfa_user', JSON.stringify(updated));
+            return updated;
+          });
+        }
+      } catch { /* silent */ }
+    }, USERS_INTERVAL);
+
     return () => {
       clearInterval(postTimer);
       clearInterval(msgsTimer);
       clearInterval(chatsTimer);
+      clearInterval(usersTimer);
     };
   }, [currentUser?.id]);
 
