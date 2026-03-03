@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://194.87.161.135:8000';
 
 async function get(params: Record<string, string>) {
   const query = new URLSearchParams(params).toString();
