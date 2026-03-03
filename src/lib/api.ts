@@ -13,6 +13,23 @@ async function get(params: Record<string, string>) {
   }
 }
 
+async function post(params: Record<string, string>, body: Record<string, unknown> = {}) {
+  const query = new URLSearchParams(params).toString();
+  try {
+    const res = await fetch(`${API_URL}?${query}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Ошибка сервера: ${res.status}`);
+    return data;
+  } catch (e) {
+    if (e instanceof Error && !e.message.includes('fetch')) throw e;
+    throw new Error('Ошибка соединения с сервером. Попробуйте ещё раз.');
+  }
+}
+
 export const api = {
   register: (name: string, password: string, phone: string, login: string) =>
     get({ action: 'register', name, password, phone, login }),
@@ -28,9 +45,9 @@ export const api = {
   getUsers: () => get({ action: 'users' }),
   getPosts: () => get({ action: 'posts' }),
   sendMessage: (chatId: number, senderId: number, text: string, images?: string[]) =>
-    get({ action: 'send_message', chat_id: String(chatId), sender_id: String(senderId), text, ...(images && images.length > 0 ? { images: JSON.stringify(images) } : {}) }),
+    post({ action: 'send_message' }, { chat_id: chatId, sender_id: senderId, text, images: images || [] }),
   createPost: (userId: number, text: string, images?: string[]) =>
-    get({ action: 'create_post', user_id: String(userId), text: text || (images && images.length > 0 ? ' ' : ''), ...(images && images.length > 0 ? { images: JSON.stringify(images) } : {}) }),
+    post({ action: 'create_post' }, { user_id: userId, text: text || (images && images.length > 0 ? ' ' : ''), images: images || [] }),
   createChat: (name: string, isGroup: boolean, createdBy: number, isPrivate: boolean = false) =>
     get({ action: 'create_chat', name, is_group: String(isGroup), created_by: String(createdBy), is_private: String(isPrivate) }),
   updateChatAvatar: (chatId: number, avatarUrl: string) =>
