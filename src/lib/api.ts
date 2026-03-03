@@ -1,4 +1,4 @@
-const API_URL = 'https://functions.poehali.dev/706339d3-e113-4f57-95bb-145dbb1414eb';
+const API_URL = import.meta.env.VITE_API_URL || 'http://194.87.161.135:8000';
 
 async function get(params: Record<string, string>) {
   const query = new URLSearchParams(params).toString();
