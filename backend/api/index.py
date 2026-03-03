@@ -625,5 +625,29 @@ def handler(event, context):
             return response(400, {'error': 'post_id, user_id, text required'})
         return response(200, add_comment(int(post_id), int(user_id), text))
 
+    elif action == 'get_settings':
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(f"SELECT key, value FROM {SCHEMA}.settings")
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        return response(200, {r['key']: r['value'] for r in rows})
+
+    elif action == 'save_settings':
+        key = p.get('key', '')
+        value = p.get('value', '')
+        if not key:
+            return response(400, {'error': 'key required'})
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.settings (key, value, updated_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        """, (key, value))
+        conn.commit()
+        cur.close(); conn.close()
+        return response(200, {'success': True, 'key': key, 'value': value})
+
     else:
         return response(200, {'status': 'ok'})

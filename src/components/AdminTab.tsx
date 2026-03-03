@@ -33,6 +33,18 @@ type AdminTabProps = {
 export default function AdminTab({ siteName, setSiteName, pendingUsers, approvedUsers, onUserApproved, onUserRejected, onRoleChanged, currentUserId }: AdminTabProps) {
   const [processing, setProcessing] = useState<number | null>(null);
   const [roleProcessing, setRoleProcessing] = useState<number | null>(null);
+  const [savingName, setSavingName] = useState(false);
+
+  const handleSaveSiteName = async () => {
+    setSavingName(true);
+    try {
+      await api.saveSetting('site_name', siteName);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const handleApprove = async (userId: number) => {
     setProcessing(userId);
@@ -90,8 +102,8 @@ export default function AdminTab({ siteName, setSiteName, pendingUsers, approved
                 onChange={(e) => setSiteName(e.target.value)}
                 className="rounded-md border-2"
               />
-              <Button className="rounded-md bg-primary text-white hover:bg-primary/90">
-                Сохранить
+              <Button onClick={handleSaveSiteName} disabled={savingName} className="rounded-md bg-primary text-white hover:bg-primary/90">
+                {savingName ? 'Сохранение...' : 'Сохранить'}
               </Button>
             </div>
           </div>

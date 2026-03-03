@@ -54,11 +54,13 @@ export default function Index() {
     if (!authedUser) { setLoading(false); return; }
     async function load() {
       try {
-        const [dbUsers, dbChats, dbPosts] = await Promise.all([
+        const [dbUsers, dbChats, dbPosts, dbSettings] = await Promise.all([
           api.getUsers(),
           api.getChats(authedUser.id),
           api.getPosts(),
+          api.getSettings(),
         ]);
+        if (dbSettings?.site_name) setSiteName(dbSettings.site_name);
         const mappedUsers = dbUsers.map((u: Record<string, unknown>) => ({
           id: u.id as number,
           name: u.name as string,
@@ -193,11 +195,19 @@ export default function Index() {
       } catch { /* silent */ }
     }, USERS_INTERVAL);
 
+    const settingsTimer = setInterval(async () => {
+      try {
+        const dbSettings = await api.getSettings();
+        if (dbSettings?.site_name) setSiteName(dbSettings.site_name);
+      } catch { /* silent */ }
+    }, 30000);
+
     return () => {
       clearInterval(postTimer);
       clearInterval(msgsTimer);
       clearInterval(chatsTimer);
       clearInterval(usersTimer);
+      clearInterval(settingsTimer);
     };
   }, [currentUser?.id]);
 

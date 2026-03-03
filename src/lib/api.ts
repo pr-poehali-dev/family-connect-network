@@ -74,6 +74,10 @@ export const api = {
     get({ action: 'delete_post', post_id: String(postId), user_id: String(userId) }),
   setUserRole: (userId: number, role: 'admin' | 'user') =>
     get({ action: 'set_role', user_id: String(userId), role }),
+  getSettings: () =>
+    get({ action: 'get_settings' }),
+  saveSetting: (key: string, value: string) =>
+    get({ action: 'save_settings', key, value }),
 };
 
 export default api;
