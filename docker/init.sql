@@ -84,5 +84,15 @@ CREATE TABLE IF NOT EXISTS app.post_comments (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS app.settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO app.settings (key, value)
+VALUES ('site_name', 'Альфа Семья')
+ON CONFLICT (key) DO NOTHING;
+
 -- Первый администратор (из переменных окружения через docker-entrypoint)
 -- Создаётся через entrypoint скрипт, см. docker/create_admin.sh
