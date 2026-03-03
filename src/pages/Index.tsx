@@ -105,10 +105,10 @@ export default function Index() {
 
   useEffect(() => {
     if (!currentUser) return;
-    const POSTS_INTERVAL = 15000;
+    const POSTS_INTERVAL = 10000;
     const MSGS_INTERVAL = 3000;
-    const CHATS_INTERVAL = 15000;
-    const USERS_INTERVAL = 15000;
+    const CHATS_INTERVAL = 5000;
+    const USERS_INTERVAL = 5000;
 
     const postTimer = setInterval(async () => {
       try {
