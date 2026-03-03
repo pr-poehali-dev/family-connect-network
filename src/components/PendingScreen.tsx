@@ -5,9 +5,10 @@ import Icon from '@/components/ui/icon';
 type PendingScreenProps = {
   userName: string;
   onLogout: () => void;
+  siteName?: string;
 };
 
-export default function PendingScreen({ userName, onLogout }: PendingScreenProps) {
+export default function PendingScreen({ userName, onLogout, siteName = 'Альфа Семья' }: PendingScreenProps) {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md border rounded-lg overflow-hidden">
@@ -18,7 +19,7 @@ export default function PendingScreen({ userName, onLogout }: PendingScreenProps
             </svg>
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30" />
           </div>
-          <h1 className="text-2xl font-bold mt-4">Альфа Семья</h1>
+          <h1 className="text-2xl font-bold mt-4">{siteName}</h1>
         </CardHeader>
         <CardContent className="pt-8 pb-8 text-center">
           <div className="w-20 h-20 bg-orange-100 rounded-full grid place-items-center mx-auto mb-4">

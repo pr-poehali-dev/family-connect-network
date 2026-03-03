@@ -14,6 +14,12 @@ import type { User, Chat, Message, Post, DbChat, DbMessage, DbPost } from '@/typ
 import { mapChat, mapMessage, mapPost, formatTime } from '@/types/index';
 
 export default function Index() {
+  const [siteName, setSiteName] = useState('Альфа Семья');
+
+  useEffect(() => {
+    api.getSettings().then((s) => { if (s?.site_name) setSiteName(s.site_name); }).catch(() => {});
+  }, []);
+
   const [authedUser, setAuthedUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('alfa_user');
@@ -30,7 +36,6 @@ export default function Index() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('home');
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [siteName, setSiteName] = useState('Альфа Семья');
 
   const [users, setUsers] = useState<User[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
@@ -291,7 +296,7 @@ export default function Index() {
   };
 
   if (!authedUser) {
-    return <AuthPage onAuth={handleAuth} />;
+    return <AuthPage onAuth={handleAuth} siteName={siteName} />;
   }
 
   if (loading) {
@@ -311,7 +316,7 @@ export default function Index() {
   }
 
   if (currentUser && currentUser.status === 'pending') {
-    return <PendingScreen userName={currentUser.name} onLogout={handleLogout} />;
+    return <PendingScreen userName={currentUser.name} onLogout={handleLogout} siteName={siteName} />;
   }
 
   if (!currentUser) return null;

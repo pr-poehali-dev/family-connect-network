@@ -9,6 +9,7 @@ import api from '@/lib/api';
 
 type AuthPageProps = {
   onAuth: (user: Record<string, unknown>) => void;
+  siteName?: string;
 };
 
 function AlphaLogo({ size = 'md' }: { size?: 'md' | 'lg' }) {
@@ -24,7 +25,7 @@ function AlphaLogo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   );
 }
 
-export default function AuthPage({ onAuth }: AuthPageProps) {
+export default function AuthPage({ onAuth, siteName = 'Альфа Семья' }: AuthPageProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [regMethod, setRegMethod] = useState<'phone' | 'login'>('phone');
 
@@ -113,7 +114,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         <Card className="w-full max-w-md border rounded-lg overflow-hidden">
           <CardHeader className="bg-primary text-white text-center py-8">
             <AlphaLogo size="lg" />
-            <h1 className="text-2xl font-bold mt-4">Альфа Семья</h1>
+            <h1 className="text-2xl font-bold mt-4">{siteName}</h1>
           </CardHeader>
           <CardContent className="pt-8 pb-8 text-center">
             <div className="w-16 h-16 bg-orange-100 rounded-full grid place-items-center mx-auto mb-4">
@@ -141,7 +142,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       <Card className="w-full max-w-md border rounded-lg overflow-hidden">
         <CardHeader className="bg-primary text-white text-center py-8 flex flex-col items-center">
           <AlphaLogo size="lg" />
-          <h1 className="text-2xl font-bold mt-4">Альфа Семья</h1>
+          <h1 className="text-2xl font-bold mt-4">{siteName}</h1>
           <p className="text-white/70 text-sm mt-1">Семейная социальная сеть</p>
         </CardHeader>
         <CardContent className="pt-6">
