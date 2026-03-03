@@ -1,0 +1,44 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y libpq-dev gcc && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt* ./
+RUN pip install --no-cache-dir psycopg2-binary flask gunicorn
+
+COPY . .
+
+# Меняем имя схемы на 'app'
+RUN sed -i "s/SCHEMA = 't_p43528340_family_connect_netwo'/SCHEMA = 'app'/" index.py
+
+# Создаём flask-обёртку
+RUN cat > server.py << 'EOF'
+from flask import Flask, request
+from index import handler
+
+app = Flask(__name__)
+
+@app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+@app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+def proxy(path):
+    event = {
+        'httpMethod': request.method,
+        'path': '/' + path,
+        'headers': dict(request.headers),
+        'queryStringParameters': dict(request.args),
+        'body': request.get_data(as_text=True) or '{}',
+    }
+    result = handler(event, type('ctx', (), {'request_id': '1'})())
+    resp = app.response_class(
+        response=result.get('body', '{}'),
+        status=result.get('statusCode', 200),
+        mimetype='application/json'
+    )
+    for k, v in result.get('headers', {}).items():
+        resp.headers[k] = v
+    return resp
+EOF
+
+EXPOSE 8000
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "server:app", "--workers", "2"]
