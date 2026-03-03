@@ -10,6 +10,8 @@ import { TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import api from '@/lib/api';
 
 type User = {
   id: number;
@@ -18,6 +20,7 @@ type User = {
   initials: string;
   status: 'approved' | 'pending';
   role: 'admin' | 'user';
+  login?: string;
 };
 
 type Message = {
@@ -49,18 +52,36 @@ type ChatsTabProps = {
   onCreateChat: (chatName: string, isGroup: boolean, isPrivate: boolean) => void;
   onSendMessage: (text: string, images?: string[]) => void;
   onChangeChatAvatar: (chatId: number, avatarUrl: string) => void;
+  onStartPrivateChat?: (userId: number) => void;
 };
 
-export default function ChatsTab({ chats, messages, users, currentUser, selectedChat, setSelectedChat, onCreateChat, onSendMessage, onChangeChatAvatar }: ChatsTabProps) {
+export default function ChatsTab({ chats, messages, users, currentUser, selectedChat, setSelectedChat, onCreateChat, onSendMessage, onChangeChatAvatar, onStartPrivateChat }: ChatsTabProps) {
   const [newChatName, setNewChatName] = useState('');
   const [isGroupChat, setIsGroupChat] = useState(true);
   const [isPrivateChat, setIsPrivateChat] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [invitingUserId, setInvitingUserId] = useState<number | null>(null);
+  const [inviteError, setInviteError] = useState('');
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
   const [editingChatId, setEditingChatId] = useState<number | null>(null);
+
+  const handleInviteUser = async (user: User) => {
+    if (!selectedChat) return;
+    setInvitingUserId(user.id);
+    setInviteError('');
+    try {
+      await api.addChatMember(selectedChat.id, user.login || user.name, currentUser.id);
+      setInviteDialogOpen(false);
+    } catch (e) {
+      setInviteError('Не удалось пригласить пользователя');
+    } finally {
+      setInvitingUserId(null);
+    }
+  };
 
   const handleCreateChat = () => {
     if (newChatName.trim()) {
@@ -255,7 +276,7 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                     </div>
                   </div>
                   {selectedChat.isGroup && (
-                    <Dialog>
+                    <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
                       <DialogTrigger asChild>
                         <Button size="icon" variant="ghost" className="text-white hover:bg-white/20 rounded-full">
                           <Icon name="UserPlus" size={18} />
@@ -265,17 +286,25 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                         <DialogHeader>
                           <DialogTitle>Пригласить в беседу</DialogTitle>
                         </DialogHeader>
-                        <div className="space-y-2 pt-4">
-                          {users.filter(u => u.id !== currentUser.id).map((user) => (
-                            <button key={user.id} className="w-full p-3 rounded-lg hover:bg-primary/5 transition-colors flex items-center gap-3 text-left">
+                        {inviteError && <p className="text-sm text-destructive px-1">{inviteError}</p>}
+                        <div className="space-y-2 pt-2">
+                          {users.filter(u => u.id !== currentUser.id && u.status === 'approved').map((user) => (
+                            <button
+                              key={user.id}
+                              onClick={() => handleInviteUser(user)}
+                              disabled={invitingUserId === user.id}
+                              className="w-full p-3 rounded-lg hover:bg-primary/5 transition-colors flex items-center gap-3 text-left disabled:opacity-50"
+                            >
                               <Avatar className="w-10 h-10 border border-primary/20">
                                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">{user.initials}</AvatarFallback>
                               </Avatar>
                               <div className="flex-1">
                                 <p className="font-medium">{user.name}</p>
-                                <p className="text-xs text-muted-foreground">{user.status === 'approved' ? 'Участник' : 'Ожидает'}</p>
+                                <p className="text-xs text-muted-foreground">{user.role === 'admin' ? 'Администратор' : 'Участник'}</p>
                               </div>
-                              <Icon name="Plus" size={18} className="text-primary" />
+                              {invitingUserId === user.id
+                                ? <Icon name="Loader" size={18} className="text-primary animate-spin" />
+                                : <Icon name="Plus" size={18} className="text-primary" />}
                             </button>
                           ))}
                         </div>
@@ -291,9 +320,36 @@ export default function ChatsTab({ chats, messages, users, currentUser, selected
                     const sender = users.find(u => u.id === msg.senderId);
                     return (
                       <div key={msg.id} className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                        <Avatar className="w-8 h-8 border border-border">
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{sender?.initials}</AvatarFallback>
-                        </Avatar>
+                        {!isOwn && sender ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="w-8 h-8 rounded-full border border-border bg-primary/10 flex items-center justify-center text-primary text-xs font-semibold hover:ring-2 hover:ring-primary/30 transition-all flex-shrink-0">
+                                {sender.initials}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem onClick={() => onStartPrivateChat?.(sender.id)}>
+                                <Icon name="MessageCircle" size={14} className="mr-2" />
+                                Написать личное сообщение
+                              </DropdownMenuItem>
+                              {currentUser.role === 'admin' && selectedChat?.isGroup && (
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={async () => {
+                                    try { await api.removeChatMember?.(selectedChat.id, sender.id); } catch (e) { console.error(e); }
+                                  }}
+                                >
+                                  <Icon name="UserMinus" size={14} className="mr-2" />
+                                  Выгнать из беседы
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <Avatar className="w-8 h-8 border border-border flex-shrink-0">
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{sender?.initials}</AvatarFallback>
+                          </Avatar>
+                        )}
                         <div className={`max-w-[70%] ${isOwn ? 'items-end' : ''}`}>
                           <div className={`rounded-lg p-3 ${isOwn ? 'bg-primary text-white' : 'bg-muted'}`}>
                             {msg.text && <p>{msg.text}</p>}

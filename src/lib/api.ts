@@ -78,6 +78,8 @@ export const api = {
     get({ action: 'get_settings' }),
   saveSetting: (key: string, value: string) =>
     get({ action: 'save_settings', key, value }),
+  removeChatMember: (chatId: number, userId: number) =>
+    get({ action: 'remove_chat_member', chat_id: String(chatId), user_id: String(userId) }),
 };
 
 export default api;

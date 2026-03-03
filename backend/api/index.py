@@ -625,6 +625,18 @@ def handler(event, context):
             return response(400, {'error': 'post_id, user_id, text required'})
         return response(200, add_comment(int(post_id), int(user_id), text))
 
+    elif action == 'remove_chat_member':
+        chat_id = p.get('chat_id')
+        user_id = p.get('user_id')
+        if not all([chat_id, user_id]):
+            return response(400, {'error': 'chat_id, user_id required'})
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"DELETE FROM {SCHEMA}.chat_members WHERE chat_id = %s AND user_id = %s", (int(chat_id), int(user_id)))
+        conn.commit()
+        cur.close(); conn.close()
+        return response(200, {'success': True})
+
     elif action == 'get_settings':
         conn = get_conn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
