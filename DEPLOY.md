@@ -1,22 +1,53 @@
-# Инструкция по переносу сайта на другой хостинг
+# Инструкция по развёртыванию сайта
 
-Это полное руководство по переносу проекта на любой VPS/сервер с нуля.
+Полное руководство по запуску проекта на своём сервере — с нуля до готового сайта.
 
 ---
 
 ## Что входит в проект
 
-- **Frontend** — React SPA (готовая сборка: HTML + JS + CSS)
-- **Backend** — Python 3.11 API-сервер (один файл, работает как HTTP-сервис)
-- **База данных** — PostgreSQL (7 таблиц)
+- **Сайт (frontend)** — готовые HTML + JS + CSS файлы
+- **Сервер (backend)** — Python API, обрабатывает запросы
+- **База данных** — PostgreSQL, 7 таблиц (создаётся автоматически скриптом)
 
 ---
 
-## Что понадобится на новом хостинге
+## Какой хостинг выбрать
 
-- VPS или выделенный сервер (Ubuntu 20.04+)
-- Docker и Docker Compose (рекомендуется) **или** ручная установка
-- Доменное имя (опционально, но желательно)
+Рекомендуем **VPS-хостинг** — это виртуальный сервер, которым ты управляешь полностью.
+
+| Хостинг | Цена/мес | Ссылка | Примечание |
+|---|---|---|---|
+| **Timeweb Cloud** | от 200 ₽ | https://timeweb.cloud | Русский, поддержка 24/7 |
+| **Selectel** | от 350 ₽ | https://selectel.ru | Надёжный, русский |
+| **Beget VPS** | от 299 ₽ | https://beget.com | Популярный в РФ |
+| **Hetzner** | от €4 | https://hetzner.com | Дёшево, Европа |
+| **DigitalOcean** | от $6 | https://digitalocean.com | Удобная панель |
+
+**Что брать:** Ubuntu 22.04, минимум 1 CPU / 1 GB RAM / 20 GB SSD.
+
+---
+
+## Какие программы понадобятся
+
+### На твоём компьютере (для подключения к серверу):
+
+| Программа | Для чего | Ссылка |
+|---|---|---|
+| **Termius** | Подключение к серверу по SSH (удобный интерфейс) | https://termius.com |
+| **PuTTY** | Подключение к серверу по SSH (простой, только Windows) | https://putty.org |
+| **WinSCP** | Загрузка файлов на сервер (только Windows) | https://winscp.net |
+| **FileZilla** | Загрузка файлов на сервер (Windows/Mac) | https://filezilla-project.org |
+| **VS Code** | Редактор кода (если нужно что-то поправить) | https://code.visualstudio.com |
+
+> Для Mac/Linux терминал встроен — дополнительных программ не нужно.
+
+### На сервере (устанавливается автоматически через команды ниже):
+
+- **Python 3** — запускает бэкенд
+- **Node.js** — собирает фронтенд
+- **PostgreSQL** — база данных
+- **Nginx** — раздаёт сайт посетителям
 
 ---
 
@@ -24,48 +55,78 @@
 
 На poehali.dev: **Скачать → Скачать код** (ZIP архив).
 
-Распакуй архив:
+Загрузи ZIP на сервер через WinSCP/FileZilla в папку `/home/ubuntu/`.
+
+Подключись к серверу по SSH и распакуй:
 ```bash
+cd /home/ubuntu
 unzip project.zip -d myapp
 cd myapp
 ```
 
 ---
 
-## Шаг 2 — Создать базу данных PostgreSQL
+## Шаг 2 — Установить всё необходимое на сервер
 
-Установи PostgreSQL (если нет):
+Одна команда устанавливает всё сразу:
 ```bash
-sudo apt update && sudo apt install -y postgresql postgresql-contrib
-```
+sudo apt update && sudo apt install -y \
+  postgresql postgresql-contrib \
+  python3 python3-pip python3-venv \
+  nginx \
+  unzip curl
 
-Создай БД и пользователя:
-```bash
-sudo -u postgres psql
-```
-
-```sql
-CREATE USER myapp_user WITH PASSWORD 'СЮДА_ПРИДУМАЙ_ПАРОЛЬ';
-CREATE DATABASE myapp_db OWNER myapp_user;
-GRANT ALL PRIVILEGES ON DATABASE myapp_db TO myapp_user;
-\q
+# Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
 ```
 
 ---
 
-## Шаг 3 — Создать схему и таблицы
+## Шаг 3 — Создать базу данных и все таблицы автоматически
 
-Подключись к БД:
+Скрипт ниже сделает всё сам: создаст пользователя БД, базу, все 7 таблиц и первого администратора.
+
+**Сначала задай свои пароли** — открой файл `setup_db.sh` и замени значения:
 ```bash
-psql -U myapp_user -d myapp_db -h localhost
+nano /home/ubuntu/myapp/setup_db.sh
 ```
 
-Выполни SQL ниже (создаёт все таблицы):
+Создай файл `setup_db.sh`:
+```bash
+cat > /home/ubuntu/myapp/setup_db.sh << 'SCRIPT'
+#!/bin/bash
 
-```sql
+# ╔══════════════════════════════════╗
+# ║  ИЗМЕНИ ЭТИ ЗНАЧЕНИЯ ПЕРЕД      ║
+# ║  ЗАПУСКОМ!                      ║
+# ╚══════════════════════════════════╝
+DB_USER="myapp_user"
+DB_PASSWORD="ПРИДУМАЙ_ПАРОЛЬ_ДЛЯ_БД"
+DB_NAME="myapp_db"
+ADMIN_NAME="Администратор"
+ADMIN_LOGIN="admin"
+ADMIN_PASSWORD="ПРИДУМАЙ_ПАРОЛЬ_АДМИНИСТРАТОРА"
+
+# ── Создаём пользователя и базу ──────────────────────────────────────────────
+echo "Создаю пользователя и базу данных..."
+sudo -u postgres psql << SQL
+DO \$\$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$DB_USER') THEN
+    CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
+  END IF;
+END \$\$;
+CREATE DATABASE $DB_NAME OWNER $DB_USER;
+GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;
+SQL
+
+# ── Создаём схему и таблицы ───────────────────────────────────────────────────
+echo "Создаю таблицы..."
+PGPASSWORD="$DB_PASSWORD" psql -U "$DB_USER" -d "$DB_NAME" -h localhost << SQL
+
 CREATE SCHEMA IF NOT EXISTS app;
 
-CREATE TABLE app.users (
+CREATE TABLE IF NOT EXISTS app.users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -82,7 +143,7 @@ CREATE TABLE app.users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE app.chats (
+CREATE TABLE IF NOT EXISTS app.chats (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     is_group BOOLEAN NOT NULL DEFAULT false,
@@ -94,7 +155,7 @@ CREATE TABLE app.chats (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE app.chat_members (
+CREATE TABLE IF NOT EXISTS app.chat_members (
     id SERIAL PRIMARY KEY,
     chat_id INTEGER NOT NULL REFERENCES app.chats(id),
     user_id INTEGER NOT NULL REFERENCES app.users(id),
@@ -103,7 +164,7 @@ CREATE TABLE app.chat_members (
     UNIQUE(chat_id, user_id)
 );
 
-CREATE TABLE app.messages (
+CREATE TABLE IF NOT EXISTS app.messages (
     id SERIAL PRIMARY KEY,
     chat_id INTEGER NOT NULL REFERENCES app.chats(id),
     sender_id INTEGER NOT NULL REFERENCES app.users(id),
@@ -117,7 +178,7 @@ CREATE TABLE app.messages (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE app.posts (
+CREATE TABLE IF NOT EXISTS app.posts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES app.users(id),
     text TEXT NOT NULL,
@@ -129,7 +190,7 @@ CREATE TABLE app.posts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE app.post_likes (
+CREATE TABLE IF NOT EXISTS app.post_likes (
     id SERIAL PRIMARY KEY,
     post_id INTEGER NOT NULL REFERENCES app.posts(id),
     user_id INTEGER NOT NULL REFERENCES app.users(id),
@@ -137,7 +198,7 @@ CREATE TABLE app.post_likes (
     UNIQUE(post_id, user_id)
 );
 
-CREATE TABLE app.post_comments (
+CREATE TABLE IF NOT EXISTS app.post_comments (
     id SERIAL PRIMARY KEY,
     post_id INTEGER NOT NULL REFERENCES app.posts(id),
     user_id INTEGER NOT NULL REFERENCES app.users(id),
@@ -145,55 +206,69 @@ CREATE TABLE app.post_comments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-```
 
-Создай первого администратора (замени данные):
-```sql
+-- Первый администратор
 INSERT INTO app.users (name, email, password_hash, initials, login, role, status)
 VALUES (
-    'Имя Администратора',
-    'admin@alfa.local',
-    encode(sha256('ВАШ_ПАРОЛЬ'::bytea), 'hex'),
-    'АД',
-    'admin',
+    '$ADMIN_NAME',
+    '${ADMIN_LOGIN}@alfa.local',
+    encode(sha256('${ADMIN_PASSWORD}'::bytea), 'hex'),
+    UPPER(LEFT('$ADMIN_NAME', 2)),
+    '$ADMIN_LOGIN',
     'admin',
     'approved'
-);
+) ON CONFLICT (email) DO NOTHING;
+
+SQL
+
+echo ""
+echo "✅ База данных создана успешно!"
+echo "   Пользователь БД: $DB_USER"
+echo "   База данных: $DB_NAME"
+echo "   Логин администратора: $ADMIN_LOGIN"
+echo ""
+echo "Сохрани строку подключения:"
+echo "   DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
+SCRIPT
+
+chmod +x /home/ubuntu/myapp/setup_db.sh
+echo "Файл setup_db.sh создан. Открой его (nano setup_db.sh), задай пароли и запусти: bash setup_db.sh"
 ```
 
-> Пароль хранится как SHA-256. Если `sha256` недоступна — вычисли хеш командой:
-> `echo -n "ВАШ_ПАРОЛЬ" | sha256sum`
+Теперь запусти создание скрипта, потом отредактируй пароли и запусти его:
+```bash
+# 1. Создать файл скрипта
+bash /home/ubuntu/myapp/setup_db.sh  # первый раз создаст файл
+
+# 2. Открой и замени пароли
+nano /home/ubuntu/myapp/setup_db.sh
+
+# 3. Запусти — создаст БД и все таблицы
+bash /home/ubuntu/myapp/setup_db.sh
+```
 
 ---
 
 ## Шаг 4 — Настроить бэкенд
 
-### Установи зависимости Python:
 ```bash
-sudo apt install -y python3 python3-pip python3-venv
-cd backend/api
+cd /home/ubuntu/myapp/backend/api
+
+# Установи зависимости
 python3 -m venv venv
 source venv/bin/activate
 pip install psycopg2-binary flask gunicorn
 ```
 
-### Измени имя схемы в коде
-
-Открой файл `backend/api/index.py`, найди строку:
-```python
-SCHEMA = 't_p43528340_family_connect_netwo'
-```
-Замени на:
-```python
-SCHEMA = 'app'
+Измени имя схемы в коде бэкенда:
+```bash
+sed -i "s/SCHEMA = 't_p43528340_family_connect_netwo'/SCHEMA = 'app'/" index.py
 ```
 
-### Создай файл-обёртку для запуска Flask
-
-Создай файл `backend/api/server.py`:
-```python
-import json
-from flask import Flask, request, jsonify
+Создай файл-обёртку `server.py`:
+```bash
+cat > /home/ubuntu/myapp/backend/api/server.py << 'EOF'
+from flask import Flask, request
 from index import handler
 
 app = Flask(__name__)
@@ -201,117 +276,48 @@ app = Flask(__name__)
 @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 def proxy(path):
-    body = request.get_data(as_text=True) or '{}'
     event = {
         'httpMethod': request.method,
         'path': '/' + path,
         'headers': dict(request.headers),
         'queryStringParameters': dict(request.args),
-        'body': body,
+        'body': request.get_data(as_text=True) or '{}',
     }
     result = handler(event, type('ctx', (), {'request_id': '1'})())
-    resp_body = result.get('body', '{}')
-    resp_headers = result.get('headers', {})
-    status = result.get('statusCode', 200)
-    response = app.response_class(
-        response=resp_body,
-        status=status,
+    resp = app.response_class(
+        response=result.get('body', '{}'),
+        status=result.get('statusCode', 200),
         mimetype='application/json'
     )
-    for k, v in resp_headers.items():
-        response.headers[k] = v
-    return response
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
-```
-
-### Создай .env файл с настройками:
-```bash
-# backend/api/.env
-DATABASE_URL=postgresql://myapp_user:СЮДА_ПАРОЛЬ@localhost:5432/myapp_db
-```
-
-### Запусти бэкенд:
-```bash
-cd backend/api
-source venv/bin/activate
-export DATABASE_URL="postgresql://myapp_user:ПАРОЛЬ@localhost:5432/myapp_db"
-gunicorn --bind 0.0.0.0:8000 server:app --workers 2 --daemon
+    for k, v in result.get('headers', {}).items():
+        resp.headers[k] = v
+    return resp
+EOF
 ```
 
 ---
 
-## Шаг 5 — Собрать и раздать фронтенд
+## Шаг 5 — Собрать фронтенд
 
-### Установи Node.js:
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-```
+cd /home/ubuntu/myapp
 
-### Укажи URL бэкенда во фронтенде
+# Укажи адрес своего сервера (замени на свой IP или домен)
+echo "VITE_API_URL=http://ВАШ_IP:8000" > .env.production
 
-Создай файл `.env.production` в корне проекта:
-```
-VITE_API_URL=http://ВАШ_IP_ИЛИ_ДОМЕН:8000
-```
-
-Затем в `src/api.ts` (или где хранятся запросы) убедись, что URL берётся из переменной окружения.
-
-### Собери фронтенд:
-```bash
 npm install
 npm run build
-```
-
-Готовые файлы будут в папке `dist/`.
-
----
-
-## Шаг 6 — Настроить Nginx
-
-Установи Nginx:
-```bash
-sudo apt install -y nginx
-```
-
-Создай конфиг `/etc/nginx/sites-available/myapp`:
-```nginx
-server {
-    listen 80;
-    server_name ВАШ_ДОМЕН_ИЛИ_IP;
-
-    # Фронтенд
-    root /home/ubuntu/myapp/dist;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Бэкенд API
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-Активируй и запусти:
-```bash
-sudo ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
+# Готовые файлы сайта — в папке dist/
 ```
 
 ---
 
-## Шаг 7 — Автозапуск бэкенда (systemd)
+## Шаг 6 — Настроить автозапуск
 
-Создай файл `/etc/systemd/system/myapp-api.service`:
-```ini
+### Бэкенд (systemd):
+```bash
+# Замени ПАРОЛЬ_БД на свой пароль
+sudo tee /etc/systemd/system/myapp-api.service << EOF
 [Unit]
 Description=MyApp API
 After=network.target postgresql.service
@@ -319,61 +325,84 @@ After=network.target postgresql.service
 [Service]
 User=ubuntu
 WorkingDirectory=/home/ubuntu/myapp/backend/api
-Environment="DATABASE_URL=postgresql://myapp_user:ПАРОЛЬ@localhost:5432/myapp_db"
+Environment="DATABASE_URL=postgresql://myapp_user:ПАРОЛЬ_БД@localhost:5432/myapp_db"
 ExecStart=/home/ubuntu/myapp/backend/api/venv/bin/gunicorn --bind 0.0.0.0:8000 server:app --workers 2
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
-```
+EOF
 
-Включи сервис:
-```bash
 sudo systemctl daemon-reload
 sudo systemctl enable myapp-api
 sudo systemctl start myapp-api
 ```
 
+### Nginx (раздаёт сайт):
+```bash
+# Замени ВАШ_ДОМЕН_ИЛИ_IP на свои данные
+sudo tee /etc/nginx/sites-available/myapp << EOF
+server {
+    listen 80;
+    server_name ВАШ_ДОМЕН_ИЛИ_IP;
+
+    root /home/ubuntu/myapp/dist;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+}
+EOF
+
+sudo ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl restart nginx
+```
+
 ---
 
-## Шаг 8 — SSL-сертификат (HTTPS)
+## Шаг 7 — SSL-сертификат (HTTPS, только если есть домен)
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d ВАШ_ДОМЕН
 ```
 
-Certbot сам обновит конфиг Nginx и настроит автопродление.
+Сертификат бесплатный, продлевается автоматически.
 
 ---
 
-## Перенос существующих данных (опционально)
+## Проверка — всё ли работает
 
-Если хочешь перенести данные из текущей БД на poehali.dev:
-
-1. Попроси администратора платформы выгрузить дамп БД (pg_dump)
-2. Залей дамп на новый сервер:
 ```bash
-psql -U myapp_user -d myapp_db < dump.sql
+# Статус бэкенда
+sudo systemctl status myapp-api
+
+# Статус nginx
+sudo systemctl status nginx
+
+# Логи бэкенда (если что-то не так)
+sudo journalctl -u myapp-api -n 50
 ```
 
 ---
 
-## Итоговая структура на сервере
+## Итого — порядок действий
 
-```
-/home/ubuntu/myapp/
-├── dist/                  ← собранный фронтенд (Nginx раздаёт)
-├── backend/
-│   └── api/
-│       ├── index.py       ← основной код API
-│       ├── server.py      ← Flask-обёртка (создать вручную)
-│       └── venv/          ← Python-окружение
-└── .env.production        ← переменные для сборки фронтенда
-```
+1. Арендовать VPS (Ubuntu 22.04, 1 GB RAM)
+2. Подключиться по SSH (Termius или PuTTY)
+3. Загрузить код через WinSCP/FileZilla
+4. Выполнить команды из Шагов 2–6
+5. Открыть сайт по IP сервера в браузере
 
 ---
 
-## Контакты и поддержка
+## Поддержка
 
 Если что-то не получается — напиши в наш Telegram: https://t.me/+QgiLIa1gFRY4Y2Iy
